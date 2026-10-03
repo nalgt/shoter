@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#101721">
+    <meta name="description" content="A free, lightweight arena game. Battle bots in free-for-all, survive the waves, or capture the territory.">
+    <title>Outpost — Browser Arena</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="game-shell">
+      <canvas id="game" aria-label="Game arena"></canvas>
+
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Outpost home">
+          <span class="brand-mark">O</span>
+          <span>OUTPOST<small>ARENA PROTOCOL</small></span>
+        </a>
+        <div class="topbar-right">
+          <span class="online-indicator" id="online-indicator"><i></i> BOT MATCH · 3D</span>
+          <button id="pause-button" class="icon-button" aria-label="Pause game" title="Pause">Ⅱ</button>
+        </div>
+      </header>
+
+      <section class="hud" aria-live="polite">
+        <div class="hud-card health-card">
+          <span class="eyebrow">VITALS</span>
+          <div class="health-line"><strong id="health-value">100</strong><span> / 100</span></div>
+          <div class="meter"><i id="health-meter"></i></div>
+        </div>
+        <div class="hud-card objective-card">
+          <span class="eyebrow" id="mode-label">FREE FOR ALL</span>
+          <strong id="objective-value">ELIMINATIONS <b>0</b></strong>
+          <span id="objective-subtitle">Outlast the arena</span>
+        </div>
+        <div class="hud-card clock-card">
+          <span class="eyebrow">MATCH TIME</span>
+          <strong id="clock-value">00:00</strong>
+        </div>
+      </section>
+
+      <div class="crosshair" id="crosshair" aria-hidden="true"></div>
+      <section class="combat-hud" aria-label="Combat status">
+        <div class="ammo-readout"><span class="eyebrow">RIFLE AMMO</span><strong id="ammo-value">30</strong><span class="reserve-count">/ <span id="reserve-value">120</span></span></div>
+        <div class="stamina-readout"><span class="eyebrow">SPRINT ENERGY</span><div class="meter"><i id="stamina-meter"></i></div></div>
+      </section>
+
+      <section id="start-screen" class="screen">
+        <div class="panel start-panel">
+          <div class="panel-kicker"><span></span> OUTPOST // COMMAND HUB</div>
+          <h1>GEAR UP.<br><em>DEPLOY.</em></h1>
+          <p class="intro">Choose a mode, upgrade your loadout, and take on the arena.</p>
+          <div class="mode-list" role="group" aria-label="Choose a game mode">
+            <button class="mode-option selected" data-mode="ffa">
+              <span class="mode-number">01</span><span class="mode-copy"><strong>FREE FOR ALL</strong><small>Every bot for itself. Be the last one standing.</small></span><span class="mode-arrow">↗</span>
+            </button>
+            <button class="mode-option" data-mode="survival">
+              <span class="mode-number">02</span><span class="mode-copy"><strong>SURVIVAL</strong><small>Hold your ground against endless waves.</small></span><span class="mode-arrow">↗</span>
+            </button>
+            <button class="mode-option" data-mode="waves">
+              <span class="mode-number">03</span><span class="mode-copy"><strong>WAVES</strong><small>Clear ten tougher waves to win.</small></span><span class="mode-arrow">↗</span>
+            </button>
+            <button class="mode-option" data-mode="territory">
+              <span class="mode-number">04</span><span class="mode-copy"><strong>TERRITORY WAR</strong><small>Take the flag. Hold the zone. Score for your team.</small></span><span class="mode-arrow">↗</span>
+            </button>
+          </div>
+          <button id="play-button" class="primary-button">DEPLOY <span>→</span></button>
+          <div class="hub-actions">
+            <button id="shop-open" class="hub-action">WEAPON ARMORY <span id="credits-display">CREDITS 200</span></button>
+            <button id="avatar-open" class="hub-action" type="button">OPERATIVE <span>LOOKS &amp; LOADOUT</span></button>
+            <button id="online-toggle" class="hub-action" type="button">ONLINE: OFF</button>
+          </div>
+          <label class="callsign-label" for="callsign-input">CALLSIGN</label>
+          <input id="callsign-input" class="callsign-input" maxlength="18" autocomplete="nickname" value="Ranger">
+          <p id="online-status" class="online-status" aria-live="polite">Solo match · bots only</p>
+          <p class="fine-print">SOLO READY · AI BOTS · FREE TO PLAY</p>
+        </div>
+        <div class="screen-aside">PC: FIRST PERSON · WASD MOVE · MOUSE LOOK · CLICK / SPACE FIRE · ESC PAUSE <span>·</span> PHONE: THIRD PERSON</div>
+      </section>
+
+      <section id="human-screen" class="screen onboarding-screen" aria-labelledby="human-title">
+        <div class="panel onboarding-panel">
+          <div class="panel-kicker"><span></span> OUTPOST // ACCESS CHECK</div>
+          <h1 id="human-title">ARE YOU<br><em>HUMAN?</em></h1>
+          <p class="intro">Complete the quick security check before entering the command hub.</p>
+          <button id="human-check" class="human-check" type="button" aria-pressed="false">
+            <span class="human-core" aria-hidden="true"></span>
+            <span><strong>I AM HUMAN</strong><small>Tap to verify your access</small></span>
+          </button>
+          <p id="human-status" class="online-status" aria-live="polite">Verification required</p>
+        </div>
+      </section>
+
+      <section id="account-screen" class="screen onboarding-screen hidden" aria-labelledby="account-title">
+        <form id="account-form" class="panel onboarding-panel">
+          <div class="panel-kicker"><span></span> OUTPOST // NEW ACCOUNT</div>
+          <h1 id="account-title">CREATE YOUR<br><em>CALLSIGN.</em></h1>
+          <p class="intro">Your callsign, account setup, and arena progress are saved on this device.</p>
+          <label class="callsign-label" for="account-callsign">CALLSIGN</label>
+          <input id="account-callsign" class="callsign-input" maxlength="18" autocomplete="nickname" placeholder="Ranger" required>
+          <button class="primary-button" type="submit">ENTER COMMAND HUB <span>→</span></button>
+          <p class="fine-print">3 LOCAL SAVE COOKIES · NO EMAIL REQUIRED</p>
+        </form>
+      </section>
+
+      <section id="shop-screen" class="screen hidden" aria-label="Weapon shop">
+        <div class="panel shop-panel">
+          <div class="panel-kicker"><span></span> COMMAND HUB // ARMORY</div>
+          <div class="shop-heading"><h2>CHOOSE YOUR<br><em>LOADOUT.</em></h2><strong id="shop-credits">200 CREDITS</strong></div>
+          <p class="intro">Weapons are sidegrades, not pay-to-win. Buy once and keep them.</p>
+          <h3 class="shop-section-title">PRIMARY</h3>
+          <div id="primary-shop" class="shop-grid"></div>
+          <h3 class="shop-section-title">SECONDARY</h3>
+          <div id="secondary-shop" class="shop-grid"></div>
+          <button id="shop-close" class="primary-button">BACK TO HUB <span>→</span></button>
+        </div>
+      </section>
+
+      <section id="avatar-screen" class="screen hidden" aria-label="Operative appearance">
+        <div class="panel avatar-panel">
+          <div class="panel-kicker"><span></span> COMMAND HUB // OPERATIVE BAY</div>
+          <div class="avatar-heading">
+            <div>
+              <h2>CHOOSE YOUR<br><em>OPERATIVE.</em></h2>
+              <p class="intro">This is the avatar that enters the online lobby and appears in third-person play.</p>
+            </div>
+            <strong id="avatar-credits">200 CREDITS</strong>
+          </div>
+          <div class="avatar-layout">
+            <div id="avatar-preview" class="avatar-preview" data-skin="ranger" aria-label="Your operative preview">
+              <span class="avatar-helmet"></span><span class="avatar-head"></span><span class="avatar-visor"></span>
+              <span class="avatar-body"></span><span class="avatar-arm avatar-arm-left"></span><span class="avatar-arm avatar-arm-right"></span>
+              <span class="avatar-leg avatar-leg-left"></span><span class="avatar-leg avatar-leg-right"></span>
+              <span class="avatar-rifle"></span>
+            </div>
+            <div class="avatar-summary"><span class="eyebrow">ACTIVE OPERATIVE</span><strong id="avatar-callsign">RANGER</strong><small>Saved with your local progress</small></div>
+          </div>
+          <div id="skin-choices" class="skin-choices" aria-label="Choose operative look"></div>
+          <button id="avatar-close" class="primary-button" type="button">BACK TO HUB <span>→</span></button>
+        </div>
+      </section>
+
+      <section id="pause-screen" class="screen hidden">
+        <div class="panel compact-panel">
+          <div class="panel-kicker"><span></span> MATCH PAUSED</div>
+          <h2>TAKE A<br><em>BREATHER.</em></h2>
+          <p class="intro">Your arena will be right here.</p>
+          <button id="resume-button" class="primary-button">BACK TO GAME <span>→</span></button>
+          <button id="menu-button" class="text-button">CHANGE MODE</button>
+        </div>
+      </section>
+
+      <section id="result-screen" class="screen hidden">
+        <div class="panel compact-panel">
+          <div class="panel-kicker"><span></span> MATCH COMPLETE</div>
+          <h2 id="result-title">NICE<br><em>WORK.</em></h2>
+          <p id="result-copy" class="intro">The arena remembers.</p>
+          <button id="again-button" class="primary-button">PLAY AGAIN <span>→</span></button>
+          <button id="result-menu-button" class="text-button">CHOOSE ANOTHER MODE</button>
+        </div>
+      </section>
+
+      <div id="mobile-controls" class="mobile-controls" aria-label="Touch controls">
+        <span>LEFT SIDE · MOVE</span><i></i><span>RIGHT SIDE · AIM + FIRE</span>
+        <button id="weapon-switch-button" class="reload-button" type="button">SWAP</button>
+        <button id="reload-button" class="reload-button" type="button">RELOAD</button>
+      </div>
+      <div class="bottom-hint" id="game-hint">WASD MOVE · SHIFT SPRINT · MOUSE LOOK / AIM · CLICK FIRE · 1/2 SWAP · R RELOAD · ESC PAUSE</div>
+    </main>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>
