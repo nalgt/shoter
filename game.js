@@ -42,8 +42,109 @@
     avatarPreview: document.querySelector("#avatar-preview"),
     avatarCredits: document.querySelector("#avatar-credits"),
     avatarCallsign: document.querySelector("#avatar-callsign"),
-    skinChoices: document.querySelector("#skin-choices")
+    skinChoices: document.querySelector("#skin-choices"),
+    feed: null,
+    minimap: null
   };
+
+  function injectVisualUpgrade() {
+    const styles = `
+      .arena-overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .battle-overlay {
+        position: absolute;
+        right: 18px;
+        top: 92px;
+        width: 180px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .minimap-shell {
+        width: 152px;
+        height: 152px;
+        background: rgba(8, 14, 19, 0.72);
+        border: 1px solid rgba(126, 214, 255, 0.38);
+        border-radius: 20px;
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 16px 28px rgba(0, 0, 0, 0.22);
+        padding: 8px;
+        backdrop-filter: blur(8px);
+      }
+      #minimap-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        border-radius: 14px;
+        background: radial-gradient(circle at 50% 30%, rgba(46, 77, 85, 0.72), rgba(10, 18, 24, 0.92));
+      }
+      .kill-feed {
+        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .feed-item {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 26px;
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        font-weight: 700;
+        background: rgba(16, 27, 31, 0.7);
+        border: 1px solid rgba(147, 185, 220, 0.24);
+        color: #dbeefe;
+        box-shadow: inset 0 0 28px rgba(141, 222, 255, 0.08);
+      }
+      .feed-item--alert {
+        color: #ffd7a7;
+        border-color: rgba(255, 173, 92, 0.38);
+      }
+      .feed-item--good {
+        color: #d8ff57;
+        border-color: rgba(178, 255, 98, 0.28);
+      }
+      .shell-hint {
+        position: absolute;
+        left: 50%;
+        bottom: 18px;
+        transform: translateX(-50%);
+        color: rgba(224, 239, 255, 0.82);
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        font-size: 10px;
+        background: rgba(13, 22, 27, 0.48);
+        border: 1px solid rgba(112, 171, 198, 0.2);
+        border-radius: 999px;
+        padding: 8px 16px;
+      }
+    `;
+    const style = document.createElement("style");
+    style.id = "outpost-upgrade-styles";
+    style.textContent = styles;
+    document.head.appendChild(style);
+
+    const overlay = document.createElement("div");
+    overlay.className = "arena-overlay";
+    overlay.innerHTML = `
+      <div class="battle-overlay">
+        <div class="minimap-shell"><canvas id="minimap-canvas" width="120" height="120"></canvas></div>
+        <div id="kill-feed" class="kill-feed"></div>
+      </div>
+    `;
+    shell.appendChild(overlay);
+
+    ui.feed = document.querySelector("#kill-feed");
+    ui.minimap = document.querySelector("#minimap-canvas");
+  }
+
+  injectVisualUpgrade();
 
   if (!window.THREE) {
     const message = "3D graphics could not load. Check your internet connection, then reload the page.";
@@ -156,7 +257,6 @@
     return new THREE.MeshStandardMaterial({ color, roughness, metalness });
   }
 
-  // These are intentionally separate so the site keeps exactly three small, local cookies.
   function getCookie(name) {
     const prefix = `${encodeURIComponent(name)}=`;
     const entry = document.cookie.split("; ").find(cookie => cookie.startsWith(prefix));
@@ -485,6 +585,7 @@
       return false;
     }
   }
+
   function resize() {
     if (!renderer) return;
     const width = Math.max(shell.clientWidth, 1);
@@ -560,7 +661,7 @@
       vx: 0, vy: 0,
       hitFlash: 0, alive: true, anim: random() * Math.PI * 2, aiTimer: 0,
       target: null, lootTarget: null, wanderAngle: random() * Math.PI * 2, strafeSign: random() < .5 ? -1 : 1, flankSign: random() < .5 ? -1 : 1, kills: 0,
-      model: null, parts: null
+      model: null, parts: null, recoil: 0, reloadPose: 0
     };
     actor.model = createCharacter(actor);
     configureShadowMeshes(actor.model);
@@ -572,6 +673,7 @@
     const config = activeWeaponConfig();
     if (!player || reloadTimer > 0 || magazine === config.magazine || reserveAmmo <= 0) return;
     reloadTimer = 1.25;
+    player.reloadPose = 1;
     pointer.down = false;
     setBanner("RELOADING");
   }
@@ -1057,7 +1159,7 @@
       [1505, 230], [1650, 610], [1490, 1110], [1190, 1120], [315, 830],
       [790, 335], [1080, 920], [340, 510], [1555, 900], [900, 1190],
       [90, 680], [1710, 250], [650, 770], [1310, 340], [1130, 540],
-      [445, 1250], [1370, 1230], [124, 340], [1665, 1020]
+      [445, 1250], [1370, 1230], [124, 340], [1665, 1020], [980, 680]
     ];
     for (const [x, y] of placements) {
       if (Math.hypot(x - WORLD.width / 2, y - WORLD.height / 2) < 440) continue;
@@ -1066,7 +1168,7 @@
       addTree(x, y, .8 + random() * .55);
     }
     let addedTrees = 0;
-    for (let attempt = 0; attempt < 180 && addedTrees < 34; attempt++) {
+    for (let attempt = 0; attempt < 180 && addedTrees < 42; attempt++) {
       const x = 55 + random() * (WORLD.width - 110);
       const y = 55 + random() * (WORLD.height - 110);
       const scale = .8 + random() * .55;
@@ -1314,180 +1416,229 @@
   }
 
   function setOnlineStatus(text) {
-      ui.onlineStatus.textContent = text;
-      ui.onlineIndicator.innerHTML = onlineEnabled
-        ? `<i></i> ONLINE · ${remoteActors.size + (multiplayerId ? 1 : 0)} PLAYERS`
-        : "<i></i> BOT MATCH · 3D";
+    ui.onlineStatus.textContent = text;
+    ui.onlineIndicator.innerHTML = onlineEnabled
+      ? `<i></i> ONLINE · ${remoteActors.size + (multiplayerId ? 1 : 0)} PLAYERS`
+      : "<i></i> BOT MATCH · 3D";
+  }
+
+  function addKillFeedEntry(text, tone = "neutral") {
+    if (!ui.feed) return;
+    const item = document.createElement("div");
+    item.className = `feed-item${tone === "good" ? " feed-item--good" : tone === "alert" ? " feed-item--alert" : ""}`;
+    item.textContent = text.toUpperCase();
+    ui.feed.prepend(item);
+    while (ui.feed.children.length > 5) ui.feed.removeChild(ui.feed.lastChild);
+  }
+
+  function renderMinimap() {
+    if (!ui.minimap) return;
+    const ctx = ui.minimap.getContext("2d");
+    if (!ctx) return;
+    const width = ui.minimap.width;
+    const height = ui.minimap.height;
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = "rgba(10, 20, 24, 0.9)";
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = "rgba(136, 211, 255, 0.25)";
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(8, 8, width - 16, height - 16);
+
+    const toRadar = (value, max) => 8 + (value / max) * (width - 16);
+    if (player) {
+      const px = toRadar(player.x, WORLD.width);
+      const py = toRadar(player.y, WORLD.height);
+      ctx.fillStyle = "#d8ff57";
+      ctx.beginPath();
+      ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+      ctx.fill();
     }
+    for (const bot of bots) {
+      if (!bot.alive) continue;
+      const bx = toRadar(bot.x, WORLD.width);
+      const by = toRadar(bot.y, WORLD.height);
+      ctx.fillStyle = bot.team === "blue" ? "#71ddec" : "#ff786d";
+      ctx.fillRect(bx - 2.2, by - 2.2, 4.4, 4.4);
+    }
+    for (const zone of zones) {
+      const zx = toRadar(zone.x, WORLD.width);
+      const zy = toRadar(zone.y, WORLD.height);
+      const rr = (zone.r / WORLD.width) * (width - 16);
+      ctx.strokeStyle = zone.owner === "blue" ? "#71ddec" : zone.owner === "red" ? "#ff786d" : "#d8ff57";
+      ctx.beginPath();
+      ctx.arc(zx, zy, rr, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
 
   function removeRemoteActor(id) {
-      const actor = remoteActors.get(id);
-      if (!actor) return;
-      entityGroup.remove(actor.model);
-      disposeObject(actor.model);
-      remoteActors.delete(id);
-    }
+    const actor = remoteActors.get(id);
+    if (!actor) return;
+    entityGroup.remove(actor.model);
+    disposeObject(actor.model);
+    remoteActors.delete(id);
+  }
 
   function makeRemoteActor(data) {
-      const actor = {
-        id: data.id, name: data.name, team: data.team === "red" ? "red" : "blue", skin: SKINS[data.skin] ? data.skin : "ranger",
-        x: clamp(data.x, 0, WORLD.width), y: clamp(data.y, 0, WORLD.height),
-        angle: Number.isFinite(data.angle) ? data.angle : -Math.PI / 2,
-        health: clamp(data.health || 100, 0, 100), maxHealth: 100, isPlayer: false, isRemote: true,
-        weapon: WEAPONS[data.weapon] ? data.weapon : "rifle",
-        fireSeq: Number.isSafeInteger(data.fireSeq) ? data.fireSeq : 0,
-        lastFireSeq: Number.isSafeInteger(data.fireSeq) ? data.fireSeq : 0,
-        moving: Boolean(data.moving), vx: 0, vy: 0, cooldown: 0, ammo: 24, reserveAmmo: 72, reloadTimer: 0,
-        alive: data.health > 0, hitFlash: 0, anim: 0, model: null
-      };
-      actor.model = createCharacter(actor);
-      configureShadowMeshes(actor.model);
-      entityGroup.add(actor.model);
-      remoteActors.set(actor.id, actor);
-      return actor;
-    }
+    const actor = {
+      id: data.id, name: data.name, team: data.team === "red" ? "red" : "blue", skin: SKINS[data.skin] ? data.skin : "ranger",
+      x: clamp(data.x, 0, WORLD.width), y: clamp(data.y, 0, WORLD.height),
+      angle: Number.isFinite(data.angle) ? data.angle : -Math.PI / 2,
+      health: clamp(data.health || 100, 0, 100), maxHealth: 100, isPlayer: false, isRemote: true,
+      weapon: WEAPONS[data.weapon] ? data.weapon : "rifle",
+      fireSeq: Number.isSafeInteger(data.fireSeq) ? data.fireSeq : 0,
+      lastFireSeq: Number.isSafeInteger(data.fireSeq) ? data.fireSeq : 0,
+      moving: Boolean(data.moving), vx: 0, vy: 0, cooldown: 0, ammo: 24, reserveAmmo: 72, reloadTimer: 0,
+      alive: data.health > 0, hitFlash: 0, anim: 0, model: null, recoil: 0, reloadPose: 0
+    };
+    actor.model = createCharacter(actor);
+    configureShadowMeshes(actor.model);
+    entityGroup.add(actor.model);
+    remoteActors.set(actor.id, actor);
+    return actor;
+  }
 
   function updateRemoteActor(data) {
-      if (!data || typeof data.id !== "string") return;
-      let actor = remoteActors.get(data.id);
-      if (!actor) actor = makeRemoteActor(data);
-      const previousX = actor.x, previousY = actor.y;
-      actor.x = clamp(data.x, 0, WORLD.width);
-      actor.y = clamp(data.y, 0, WORLD.height);
-      actor.vx = (actor.x - previousX) * 12;
-      actor.vy = (actor.y - previousY) * 12;
-      actor.angle = data.angle;
-      actor.health = clamp(data.health, 0, 100);
-      actor.alive = actor.health > 0;
-      actor.moving = Boolean(data.moving);
-      actor.anim += actor.moving ? .35 : .05;
-      actor.weapon = WEAPONS[data.weapon] ? data.weapon : "rifle";
-      if (Number.isSafeInteger(data.fireSeq) && data.fireSeq > actor.lastFireSeq) {
-        actor.lastFireSeq = data.fireSeq;
-        fire(actor, actor.angle, actor.weapon);
-      }
+    if (!data || typeof data.id !== "string") return;
+    let actor = remoteActors.get(data.id);
+    if (!actor) actor = makeRemoteActor(data);
+    const previousX = actor.x, previousY = actor.y;
+    actor.x = clamp(data.x, 0, WORLD.width);
+    actor.y = clamp(data.y, 0, WORLD.height);
+    actor.vx = (actor.x - previousX) * 12;
+    actor.vy = (actor.y - previousY) * 12;
+    actor.angle = data.angle;
+    actor.health = clamp(data.health, 0, 100);
+    actor.alive = actor.health > 0;
+    actor.moving = Boolean(data.moving);
+    actor.anim += actor.moving ? .35 : .05;
+    actor.weapon = WEAPONS[data.weapon] ? data.weapon : "rifle";
+    if (Number.isSafeInteger(data.fireSeq) && data.fireSeq > actor.lastFireSeq) {
+      actor.lastFireSeq = data.fireSeq;
+      fire(actor, actor.angle, actor.weapon);
     }
+  }
 
   function handleMultiplayerMessage(message) {
-      if (message.type === "welcome") {
-        multiplayerId = message.id;
-        networkMode = message.mode;
-        for (const actor of message.players) updateRemoteActor(actor);
-        setOnlineStatus(`Connected · ${remoteActors.size + 1} players in this mode`);
-        return;
-      }
-      if (message.type === "join") {
-        updateRemoteActor(message.player);
-        setOnlineStatus(`${message.player.name} joined · ${remoteActors.size + 1} players`);
-        return;
-      }
-      if (message.type === "state") {
-        updateRemoteActor(message.player);
-        setOnlineStatus(`Connected · ${remoteActors.size + 1} players in this mode`);
-        return;
-      }
-      if (message.type === "leave") {
-        removeRemoteActor(message.id);
-        setOnlineStatus(`Player left · ${remoteActors.size + 1} players`);
-        return;
-      }
-      if (message.type === "hit") {
-        if (message.targetId === multiplayerId && player) {
-          player.health = Math.max(0, player.health - message.damage);
-          if (player.health === 0) endGame(false);
-        } else {
-          const target = remoteActors.get(message.targetId);
-          if (target) target.health = Math.max(0, target.health - message.damage);
-        }
-        if (message.attackerId === multiplayerId) setBanner("PLAYER HIT");
-        updateHud();
-        return;
-      }
-      if (message.type === "error") setOnlineStatus(message.message);
+    if (message.type === "welcome") {
+      multiplayerId = message.id;
+      networkMode = message.mode;
+      for (const actor of message.players) updateRemoteActor(actor);
+      setOnlineStatus(`Connected · ${remoteActors.size + 1} players in this mode`);
+      return;
     }
+    if (message.type === "join") {
+      updateRemoteActor(message.player);
+      setOnlineStatus(`${message.player.name} joined · ${remoteActors.size + 1} players`);
+      return;
+    }
+    if (message.type === "state") {
+      updateRemoteActor(message.player);
+      setOnlineStatus(`Connected · ${remoteActors.size + 1} players in this mode`);
+      return;
+    }
+    if (message.type === "leave") {
+      removeRemoteActor(message.id);
+      setOnlineStatus(`Player left · ${remoteActors.size + 1} players`);
+      return;
+    }
+    if (message.type === "hit") {
+      if (message.targetId === multiplayerId && player) {
+        player.health = Math.max(0, player.health - message.damage);
+        if (player.health === 0) endGame(false);
+      } else {
+        const target = remoteActors.get(message.targetId);
+        if (target) target.health = Math.max(0, target.health - message.damage);
+      }
+      if (message.attackerId === multiplayerId) setBanner("PLAYER HIT");
+      updateHud();
+      return;
+    }
+    if (message.type === "error") setOnlineStatus(message.message);
+  }
 
   function connectMultiplayer(selectedMode) {
-      if (multiplayerSocket && networkMode === selectedMode && multiplayerSocket.readyState === WebSocket.OPEN) {
-        return Promise.resolve();
-      }
-      closeMultiplayer();
-      if (location.protocol === "file:") {
-        return Promise.reject(new Error("Online play needs the local server. Run `node server.js`, then open http://localhost:3000."));
-      }
-      const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-      const socket = new WebSocket(`${protocol}//${location.host}/multiplayer`);
-      multiplayerSocket = socket;
-      setOnlineStatus("Connecting to match server…");
-      return new Promise((resolve, reject) => {
-        let settled = false;
-        socket.addEventListener("open", () => {
-          const name = ui.callsign.value.trim().slice(0, 18) || "Ranger";
-          socket.send(JSON.stringify({ type: "join", mode: selectedMode, name, skin: profile.skin }));
-        }, { once: true });
-        socket.addEventListener("message", event => {
-          let message;
-          try {
-            message = JSON.parse(event.data);
-          } catch (error) {
-            console.error("Received invalid multiplayer JSON.", error);
-            socket.close(1007, "Invalid JSON");
-            return;
-          }
-          handleMultiplayerMessage(message);
-          if (!settled && message.type === "welcome") {
-            settled = true;
-            resolve();
-          } else if (!settled && message.type === "error") {
-            settled = true;
-            reject(new Error(message.message));
-          }
-        });
-        socket.addEventListener("error", () => {
-          if (!settled) {
-            settled = true;
-            reject(new Error("Could not reach the match server. Start it with `node server.js` or check the server address."));
-          }
-        }, { once: true });
-        socket.addEventListener("close", event => {
-          if (!settled) {
-            settled = true;
-            reject(new Error(event.reason || "The match server closed the connection."));
-          }
-          if (multiplayerSocket === socket) {
-            multiplayerSocket = null;
-            multiplayerId = null;
-            networkMode = "";
-            for (const id of [...remoteActors.keys()]) removeRemoteActor(id);
-            setOnlineStatus(onlineEnabled ? "Disconnected from the match server." : "Solo match · bots only");
-            if (screen === "playing") setBanner("MULTIPLAYER DISCONNECTED");
-          }
-        });
-      });
+    if (multiplayerSocket && networkMode === selectedMode && multiplayerSocket.readyState === WebSocket.OPEN) {
+      return Promise.resolve();
     }
+    closeMultiplayer();
+    if (location.protocol === "file:") {
+      return Promise.reject(new Error("Online play needs the local server. Run `node server.js`, then open http://localhost:3000."));
+    }
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${protocol}//${location.host}/multiplayer`);
+    multiplayerSocket = socket;
+    setOnlineStatus("Connecting to match server…");
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      socket.addEventListener("open", () => {
+        const name = ui.callsign.value.trim().slice(0, 18) || "Ranger";
+        socket.send(JSON.stringify({ type: "join", mode: selectedMode, name, skin: profile.skin }));
+      }, { once: true });
+      socket.addEventListener("message", event => {
+        let message;
+        try {
+          message = JSON.parse(event.data);
+        } catch (error) {
+          console.error("Received invalid multiplayer JSON.", error);
+          socket.close(1007, "Invalid JSON");
+          return;
+        }
+        handleMultiplayerMessage(message);
+        if (!settled && message.type === "welcome") {
+          settled = true;
+          resolve();
+        } else if (!settled && message.type === "error") {
+          settled = true;
+          reject(new Error(message.message));
+        }
+      });
+      socket.addEventListener("error", () => {
+        if (!settled) {
+          settled = true;
+          reject(new Error("Could not reach the match server. Start it with `node server.js` or check the server address."));
+        }
+      }, { once: true });
+      socket.addEventListener("close", event => {
+        if (!settled) {
+          settled = true;
+          reject(new Error(event.reason || "The match server closed the connection."));
+        }
+        if (multiplayerSocket === socket) {
+          multiplayerSocket = null;
+          multiplayerId = null;
+          networkMode = "";
+          for (const id of [...remoteActors.keys()]) removeRemoteActor(id);
+          setOnlineStatus(onlineEnabled ? "Disconnected from the match server." : "Solo match · bots only");
+          if (screen === "playing") setBanner("MULTIPLAYER DISCONNECTED");
+        }
+      });
+    });
+  }
 
   function closeMultiplayer() {
-      if (multiplayerSocket) {
-        const socket = multiplayerSocket;
-        multiplayerSocket = null;
-        socket.close();
-      }
-      multiplayerId = null;
-      networkMode = "";
-      for (const id of [...remoteActors.keys()]) removeRemoteActor(id);
-      setOnlineStatus(onlineEnabled ? "Online lobby ready · deploy to join." : "Solo match · bots only");
+    if (multiplayerSocket) {
+      const socket = multiplayerSocket;
+      multiplayerSocket = null;
+      socket.close();
     }
+    multiplayerId = null;
+    networkMode = "";
+    for (const id of [...remoteActors.keys()]) removeRemoteActor(id);
+    setOnlineStatus(onlineEnabled ? "Online lobby ready · deploy to join." : "Solo match · bots only");
+  }
 
   function sendMultiplayerState(dt) {
-      if (screen !== "playing" || !player || !multiplayerId ||
-          !multiplayerSocket || multiplayerSocket.readyState !== WebSocket.OPEN) return;
-      networkAccumulator += dt;
-      if (networkAccumulator < .05) return;
-      networkAccumulator = 0;
-      multiplayerSocket.send(JSON.stringify({
-        type: "state", x: player.x, y: player.y, angle: player.angle,
-        health: player.health, weapon: activeWeapon, fireSeq: networkFireSequence,
-        moving: Math.hypot(player.vx, player.vy) > 8
-      }));
+    if (screen !== "playing" || !player || !multiplayerId ||
+      !multiplayerSocket || multiplayerSocket.readyState !== WebSocket.OPEN) return;
+    networkAccumulator += dt;
+    if (networkAccumulator < .05) return;
+    networkAccumulator = 0;
+    multiplayerSocket.send(JSON.stringify({
+      type: "state", x: player.x, y: player.y, angle: player.angle,
+      health: player.health, weapon: activeWeapon, fireSeq: networkFireSequence,
+      moving: Math.hypot(player.vx, player.vy) > 8
+    }));
   }
 
   async function startMode(selectedMode) {
@@ -1590,6 +1741,7 @@
       }
     }
     actor.cooldown = playerWeapon ? weapon.delay : .78 + random() * .3;
+    actor.recoil = 1.1;
     const speed = playerWeapon ? weapon.speed : PROJECTILE_SPEED.bot;
     const firstPerson = actor.isPlayer && isDesktopFirstPerson();
     const pitch = firstPerson ? mouseLook.pitch : 0;
@@ -1628,8 +1780,26 @@
       weaponAmmo[activeWeapon] = { magazine, reserve: reserveAmmo };
       networkFireSequence++;
     }
+    const flashColor = actor.team === "blue" ? 0x8ee2ff : 0xffbe74;
+    spawnMuzzleFlash(x, y, flashColor, actor.isPlayer ? 1 : .7);
     for (let i = 0; i < 3; i++) {
       addParticle(x, y, (random() - .5) * 100, (random() - .5) * 100, .15 + random() * .12, actor.isPlayer ? COLORS.lime : 0xffbe74, .035 + random() * .035);
+    }
+  }
+
+  function spawnMuzzleFlash(x, y, color, intensity = 1) {
+    const burst = 7 + Math.round(intensity * 5);
+    for (let i = 0; i < burst; i++) {
+      const offset = 20 + random() * 18;
+      addParticle(
+        x,
+        y,
+        Math.cos(i * 1.8) * offset * (0.25 + intensity * 0.4),
+        Math.sin(i * 1.8) * offset * (0.25 + intensity * 0.4),
+        0.12 + random() * 0.18,
+        color,
+        0.03 + random() * 0.05
+      );
     }
   }
 
@@ -1733,8 +1903,10 @@
     moveActor(player, dx, dy, dt);
     player.anim += (Math.hypot(dx, dy) > .04 ? 10 : 2) * dt;
     player.cooldown = Math.max(0, player.cooldown - dt);
+    player.recoil = Math.max(0, player.recoil - dt * 2.8);
     if (reloadTimer > 0) {
       reloadTimer = Math.max(0, reloadTimer - dt);
+      player.reloadPose = reloadTimer > 0 ? 1 : 0;
       if (reloadTimer === 0) {
         const loaded = Math.min(30 - magazine, reserveAmmo);
         magazine += loaded;
@@ -1783,7 +1955,7 @@
   function segmentBlocked(x1, y1, x2, y2, margin = 0, height = 1.1) {
     for (const wall of obstacles) {
       if (wall.type === "house-wall" &&
-          (height < wall.wallBase || height > wall.wallBase + wall.wallHeight)) continue;
+        (height < wall.wallBase || height > wall.wallBase + wall.wallHeight)) continue;
       if (segmentIntersectsRect(x1, y1, x2, y2, wall, margin)) return true;
     }
     const dx = x2 - x1, dy = y2 - y1;
@@ -1842,6 +2014,7 @@
         continue;
       }
       bot.cooldown = Math.max(0, bot.cooldown - dt);
+      bot.recoil = Math.max(0, bot.recoil - dt * 2.2);
       bot.anim += 7 * dt;
       if (bot.reloadTimer > 0) {
         bot.reloadTimer = Math.max(0, bot.reloadTimer - dt);
@@ -1879,13 +2052,11 @@
         }
         const canSeeTarget = !segmentBlocked(bot.x, bot.y, bot.target.x, bot.target.y, 0, 1.1);
         if (!canSeeTarget) {
-          // Flank cover instead of repeatedly walking into the same wall.
           const flankAngle = angle + bot.flankSign * .88;
           moveX = Math.cos(flankAngle);
           moveY = Math.sin(flankAngle);
           if (random() < .08) bot.flankSign *= -1;
         } else if (bot.health < 34 && d < 410) {
-          // Damaged bots break line of fire and look for a health pickup.
           moveX = -Math.cos(angle) + Math.cos(angle + Math.PI / 2) * .68 * bot.strafeSign;
           moveY = -Math.sin(angle) + Math.sin(angle + Math.PI / 2) * .68 * bot.strafeSign;
         }
@@ -1934,12 +2105,12 @@
       let hit = bullet.life <= 0 || bullet.height < .08 || bullet.x < 0 || bullet.y < 0 || bullet.x > WORLD.width || bullet.y > WORLD.height;
       for (const wall of obstacles) {
         if (wall.type === "house-wall" &&
-            !segmentIntersectsRect(previousX, previousY, bullet.x, bullet.y, wall)) continue;
+          !segmentIntersectsRect(previousX, previousY, bullet.x, bullet.y, wall)) continue;
         const wallHitAt = segmentRectEntry(previousX, previousY, bullet.x, bullet.y, wall);
         if (wallHitAt !== null) {
           const impactHeight = previousHeight + (bullet.height - previousHeight) * wallHitAt;
           if (wall.type === "house-wall" &&
-              (impactHeight < wall.wallBase || impactHeight > wall.wallBase + wall.wallHeight)) continue;
+            (impactHeight < wall.wallBase || impactHeight > wall.wallBase + wall.wallHeight)) continue;
           hit = true;
           break;
         }
@@ -1957,7 +2128,7 @@
         const closestY = previousY + segmentY * t;
         const impactHeight = previousHeight + (bullet.height - previousHeight) * t;
         if (impactHeight > .2 && impactHeight < 2.05 &&
-            Math.hypot(actor.x - closestX, actor.y - closestY) < actor.radius + bullet.radius) {
+          Math.hypot(actor.x - closestX, actor.y - closestY) < actor.radius + bullet.radius) {
           if (actor.isRemote && multiplayerSocket?.readyState === WebSocket.OPEN) {
             multiplayerSocket.send(JSON.stringify({
               type: "hit", targetId: actor.id, damage: bullet.damage
@@ -1967,6 +2138,7 @@
           }
           actor.health -= bullet.damage;
           actor.hitFlash = .13;
+          spawnMuzzleFlash(actor.x, actor.y, bullet.team === "blue" ? 0x89e1ff : 0xffb388, 0.5);
           hit = true;
           if (actor.health <= 0) {
             actor.alive = false;
@@ -1978,6 +2150,9 @@
               const type = actor.health < 60 && random() < .62 ? "health" : "ammo";
               spawnPickup(actor.x, actor.y, type);
             }
+            const ownerLabel = bullet.owner?.isPlayer ? "YOU" : bullet.owner ? bullet.owner.team.toUpperCase() : "BOT";
+            const targetLabel = actor.isPlayer ? "YOU" : actor.team.toUpperCase();
+            addKillFeedEntry(`${ownerLabel} ELIMINATED ${targetLabel}`, bullet.owner?.isPlayer ? "good" : "alert");
             if (bullet.owner === player) {
               score++;
               bullet.owner.kills++;
@@ -2020,7 +2195,7 @@
           actor.health = Math.min(actor.maxHealth, actor.health + 35);
           pickup.age = 20;
         } else if (!actor.isPlayer && pickup.type === "ammo" &&
-            (actor.ammo < 24 || actor.reserveAmmo < 96)) {
+          (actor.ammo < 24 || actor.reserveAmmo < 96)) {
           actor.reserveAmmo = Math.min(96, actor.reserveAmmo + 48);
           if (actor.ammo < 24 && actor.reloadTimer <= 0) actor.reloadTimer = 1.1;
           pickup.age = 20;
@@ -2122,6 +2297,11 @@
         poseArmBone(arm.upperArm, shoulder, elbow, .39);
         poseArmBone(arm.lowerArm, elbow, hand, .35);
       }
+      const recoil = actor.recoil || 0;
+      parts.gun.position.z = -.39 - recoil * .7;
+      parts.gun.position.y = 1.33 - recoil * .12;
+      parts.gun.rotation.x = recoil * .26;
+      parts.gun.rotation.z = actor.isPlayer ? -recoil * .12 : recoil * .08;
       const flash = actor.hitFlash > 0 && Math.floor(actor.hitFlash * 40) % 2 === 0;
       parts.torso.material.emissive.setHex(flash ? 0xff3636 : 0x000000);
       parts.head.material.emissive.setHex(flash ? 0xff3636 : 0x000000);
@@ -2178,6 +2358,12 @@
     }
     shell.classList.toggle("first-person", Boolean(firstPerson));
     if (firstPersonWeapon) firstPersonWeapon.visible = Boolean(firstPerson && screen === "playing");
+    if (firstPersonWeapon && firstPerson) {
+      const recoil = player?.recoil || 0;
+      firstPersonWeapon.position.z = -1.02 - recoil * .25;
+      firstPersonWeapon.position.y = -.43 - recoil * .12;
+      firstPersonWeapon.rotation.x = -.035 + recoil * .22;
+    }
   }
 
   function updateHud() {
@@ -2210,6 +2396,7 @@
       ui.objective.innerHTML = `BLUE <b>${Math.floor(territoryScore.blue)}</b> — RED <b>${Math.floor(territoryScore.red)}</b>`;
       ui.subtitle.textContent = "Hold zones to score · first to 100 wins";
     }
+    renderMinimap();
   }
 
   function update(dt) {
@@ -2408,3 +2595,4 @@
   lastTime = performance.now();
   requestAnimationFrame(animate);
 })();
+
