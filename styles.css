@@ -1,1050 +1,209 @@
-/* ==================== GLOBAL STYLES ==================== */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#101721">
+    <meta name="description" content="Outpost — browser arena shooter with maps, loadouts, and bot combat.">
+    <title>Outpost — Browser Arena</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="game-shell">
+      <canvas id="game" aria-label="Game arena"></canvas>
+
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Outpost home">
+          <span class="brand-mark">O</span>
+          <span>OUTPOST<small>ARENA PROTOCOL</small></span>
+        </a>
+        <div class="topbar-right">
+          <span class="online-indicator" id="online-indicator"><i></i> BOT MATCH · 3D</span>
+          <button id="pause-button" class="icon-button" type="button" aria-label="Pause game" title="Pause">Ⅱ</button>
+        </div>
+      </header>
+
+      <section class="hud" aria-live="polite">
+        <div class="hud-card health-card">
+          <span class="eyebrow">VITALS</span>
+          <div class="health-line"><strong id="health-value">100</strong><span> / 100</span></div>
+          <div class="meter"><i id="health-meter"></i></div>
+        </div>
+        <div class="hud-card objective-card">
+          <span class="eyebrow" id="mode-label">FREE FOR ALL</span>
+          <strong id="objective-value">ELIMINATIONS <b>0</b></strong>
+          <span id="objective-subtitle">Outlast the arena</span>
+        </div>
+        <div class="hud-card clock-card">
+          <span class="eyebrow">MATCH TIME</span>
+          <strong id="clock-value">00:00</strong>
+        </div>
+      </section>
+
+      <div class="crosshair" id="crosshair" aria-hidden="true"></div>
+
+      <section class="combat-hud" aria-label="Combat status">
+        <div class="ammo-readout"><span class="eyebrow">RIFLE AMMO</span><strong id="ammo-value">30</strong><span class="reserve-count">/ <span id="reserve-value">120</span></span></div>
+        <div class="stamina-readout"><span class="eyebrow">SPRINT ENERGY</span><div class="meter"><i id="stamina-meter"></i></div></div>
+      </section>
+
+      <aside class="status-panel" id="status-panel" aria-live="polite">
+        <div class="status-row"><span>MAP</span><strong id="map-label">HARBOR</strong></div>
+        <div class="status-row"><span>LOADOUT</span><strong id="loadout-label">RIFLE</strong></div>
+        <div class="status-row"><span>FOCUS</span><strong id="focus-label">TARGET LOCK</strong></div>
+      </aside>
+
+      <section id="start-screen" class="screen">
+        <div class="panel start-panel">
+          <div class="panel-kicker"><span></span> OUTPOST // COMMAND HUB</div>
+          <h1>GEAR UP.<br><em>DEPLOY.</em></h1>
+          <p class="intro">Choose a map, tune your weapons, and fight for control of the arena.</p>
+
+          <div class="map-selector" aria-label="Choose a map">
+            <button class="map-option selected" data-map="harbor" type="button">
+              <span class="map-code">01</span>
+              <span class="map-copy"><strong>HARBOR</strong><small>Open lanes, cover, and chokepoints.</small></span>
+            </button>
+            <button class="map-option" data-map="fortress" type="button">
+              <span class="map-code">02</span>
+              <span class="map-copy"><strong>FORTRESS</strong><small>Dense walls and cross-fire routes.</small></span>
+            </button>
+            <button class="map-option" data-map="metro" type="button">
+              <span class="map-code">03</span>
+              <span class="map-copy"><strong>METRO</strong><small>Vertical combat with tight sightlines.</small></span>
+            </button>
+          </div>
+
+          <div class="mode-list" role="group" aria-label="Choose a game mode">
+            <button class="mode-option selected" data-mode="ffa" type="button">
+              <span class="mode-number">01</span>
+              <span class="mode-copy"><strong>FREE FOR ALL</strong><small>Every bot for itself.</small></span>
+              <span class="mode-arrow">↗</span>
+            </button>
+            <button class="mode-option" data-mode="survival" type="button">
+              <span class="mode-number">02</span>
+              <span class="mode-copy"><strong>SURVIVAL</strong><small>Hold out against endless waves.</small></span>
+              <span class="mode-arrow">↗</span>
+            </button>
+            <button class="mode-option" data-mode="waves" type="button">
+              <span class="mode-number">03</span>
+              <span class="mode-copy"><strong>WAVES</strong><small>Clear ten escalating assault waves.</small></span>
+              <span class="mode-arrow">↗</span>
+            </button>
+            <button class="mode-option" data-mode="territory" type="button">
+              <span class="mode-number">04</span>
+              <span class="mode-copy"><strong>TERRITORY WAR</strong><small>Capture and defend the objective.</small></span>
+              <span class="mode-arrow">↗</span>
+            </button>
+          </div>
+
+          <button id="play-button" class="primary-button" type="button">DEPLOY <span>→</span></button>
+
+          <div class="hub-actions">
+            <button id="shop-open" class="hub-action" type="button">WEAPON ARMORY <span id="credits-display">CREDITS 200</span></button>
+            <button id="avatar-open" class="hub-action" type="button">OPERATIVE <span>LOOKS &amp; LOADOUT</span></button>
+            <button id="online-toggle" class="hub-action" type="button">ONLINE: OFF</button>
+          </div>
+
+          <label class="callsign-label" for="callsign-input">CALLSIGN</label>
+          <input id="callsign-input" class="callsign-input" maxlength="18" autocomplete="nickname" value="Ranger">
+          <p id="online-status" class="online-status" aria-live="polite">Solo match · bots only</p>
+          <p class="fine-print">SOLO READY · AI BOTS · FREE TO PLAY</p>
+        </div>
+        <div class="screen-aside">PC: FIRST PERSON · WASD MOVE · MOUSE LOOK · CLICK / SPACE FIRE · ESC PAUSE <span>·</span> PHONE: THIRD PERSON</div>
+      </section>
+
+      <section id="human-screen" class="screen onboarding-screen hidden" aria-labelledby="human-title">
+        <div class="panel onboarding-panel">
+          <div class="panel-kicker"><span></span> OUTPOST // ACCESS CHECK</div>
+          <h1 id="human-title">ARE YOU<br><em>HUMAN?</em></h1>
+          <p class="intro">Complete the quick security check before entering the command hub.</p>
+          <button id="human-check" class="human-check" type="button" aria-pressed="false">
+            <span class="human-core" aria-hidden="true"></span>
+            <span><strong>I AM HUMAN</strong><small>Tap to verify your access</small></span>
+          </button>
+          <p id="human-status" class="online-status" aria-live="polite">Verification required</p>
+        </div>
+      </section>
+
+      <section id="account-screen" class="screen onboarding-screen hidden" aria-labelledby="account-title">
+        <form id="account-form" class="panel onboarding-panel">
+          <div class="panel-kicker"><span></span> OUTPOST // NEW ACCOUNT</div>
+          <h1 id="account-title">CREATE YOUR<br><em>CALLSIGN.</em></h1>
+          <p class="intro">Your callsign, account setup, and arena progress are saved on this device.</p>
+          <label class="callsign-label" for="account-callsign">CALLSIGN</label>
+          <input id="account-callsign" class="callsign-input" maxlength="18" autocomplete="nickname" placeholder="Ranger" required>
+          <button class="primary-button" type="submit">ENTER COMMAND HUB <span>→</span></button>
+          <p class="fine-print">3 LOCAL SAVE COOKIES · NO EMAIL REQUIRED</p>
+        </form>
+      </section>
+
+      <section id="shop-screen" class="screen hidden" aria-label="Weapon shop">
+        <div class="panel shop-panel">
+          <div class="panel-kicker"><span></span> COMMAND HUB // ARMORY</div>
+          <div class="shop-heading"><h2>CHOOSE YOUR<br><em>LOADOUT.</em></h2><strong id="shop-credits">200 CREDITS</strong></div>
+          <p class="intro">Weapons are sidegrades, not pay-to-win. Buy once and keep them.</p>
+          <h3 class="shop-section-title">PRIMARY</h3>
+          <div id="primary-shop" class="shop-grid"></div>
+          <h3 class="shop-section-title">SECONDARY</h3>
+          <div id="secondary-shop" class="shop-grid"></div>
+          <button id="shop-close" class="primary-button" type="button">BACK TO HUB <span>→</span></button>
+        </div>
+      </section>
+
+      <section id="avatar-screen" class="screen hidden" aria-label="Operative appearance">
+        <div class="panel avatar-panel">
+          <div class="panel-kicker"><span></span> COMMAND HUB // OPERATIVE BAY</div>
+          <div class="avatar-heading">
+            <div>
+              <h2>CHOOSE YOUR<br><em>OPERATIVE.</em></h2>
+              <p class="intro">This is the avatar that enters the online lobby and appears in third-person play.</p>
+            </div>
+            <strong id="avatar-credits">200 CREDITS</strong>
+          </div>
+          <div class="avatar-layout">
+            <div id="avatar-preview" class="avatar-preview" data-skin="ranger" aria-label="Your operative preview">
+              <span class="avatar-helmet"></span><span class="avatar-head"></span><span class="avatar-visor"></span>
+              <span class="avatar-body"></span><span class="avatar-arm avatar-arm-left"></span><span class="avatar-arm avatar-arm-right"></span>
+              <span class="avatar-leg avatar-leg-left"></span><span class="avatar-leg avatar-leg-right"></span>
+              <span class="avatar-rifle"></span>
+            </div>
+            <div class="avatar-summary"><span class="eyebrow">ACTIVE OPERATIVE</span><strong id="avatar-callsign">RANGER</strong><small>Saved with your local progress</small></div>
+          </div>
+          <div id="skin-choices" class="skin-choices" aria-label="Choose operative look"></div>
+          <button id="avatar-close" class="primary-button" type="button">BACK TO HUB <span>→</span></button>
+        </div>
+      </section>
+
+      <section id="pause-screen" class="screen hidden">
+        <div class="panel compact-panel">
+          <div class="panel-kicker"><span></span> MATCH PAUSED</div>
+          <h2>TAKE A<br><em>BREATHER.</em></h2>
+          <p class="intro">Your arena will be right here.</p>
+          <button id="resume-button" class="primary-button" type="button">BACK TO GAME <span>→</span></button>
+          <button id="menu-button" class="text-button" type="button">CHANGE MODE</button>
+        </div>
+      </section>
+
+      <section id="result-screen" class="screen hidden">
+        <div class="panel compact-panel">
+          <div class="panel-kicker"><span></span> MATCH COMPLETE</div>
+          <h2 id="result-title">NICE<br><em>WORK.</em></h2>
+          <p id="result-copy" class="intro">The arena remembers.</p>
+          <button id="again-button" class="primary-button" type="button">PLAY AGAIN <span>→</span></button>
+          <button id="result-menu-button" class="text-button" type="button">CHOOSE ANOTHER MODE</button>
+        </div>
+      </section>
+
+      <div id="mobile-controls" class="mobile-controls" aria-label="Touch controls">
+        <span>LEFT SIDE · MOVE</span><i></i><span>RIGHT SIDE · AIM + FIRE</span>
+        <button id="weapon-switch-button" class="reload-button" type="button">SWAP</button>
+        <button id="reload-button" class="reload-button" type="button">RELOAD</button>
+      </div>
+      <div class="bottom-hint" id="game-hint">WASD MOVE · SHIFT SPRINT · MOUSE LOOK / AIM · CLICK FIRE · 1/2 SWAP · R RELOAD · ESC PAUSE</div>
+    </main>
+
+    <script type="module" src="game.js"></script>
+  </body>
+</html>
 
-body {
-  font-family: 'Courier New', monospace;
-  background: #0a0e17;
-  color: #fff;
-  overflow: hidden;
-  line-height: 1.4;
-}
-
-/* ==================== GAME SHELL ==================== */
-.game-shell {
-  width: 100vw;
-  height: 100vh;
-  position: relative;
-  background: #0a0e17;
-}
-
-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-/* ==================== TOPBAR ==================== */
-.topbar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background: linear-gradient(180deg, rgba(10, 14, 23, 0.9) 0%, rgba(10, 14, 23, 0.5) 100%);
-  z-index: 100;
-  font-size: 0.75rem;
-  letter-spacing: 0.1em;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  text-decoration: none;
-  color: #fff;
-  font-weight: bold;
-  text-transform: uppercase;
-}
-
-.brand-mark {
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #00d4ff, #0099ff);
-  border-radius: 2px;
-  font-weight: 900;
-  font-size: 1.2rem;
-}
-
-.brand small {
-  display: block;
-  font-size: 0.6rem;
-  font-weight: normal;
-  color: #888;
-  letter-spacing: 0.05em;
-}
-
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.online-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.7rem;
-}
-
-.online-indicator i {
-  width: 0.4rem;
-  height: 0.4rem;
-  background: #00ff00;
-  border-radius: 50%;
-  display: inline-block;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.icon-button {
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 1.2rem;
-  cursor: pointer;
-  padding: 0.3rem 0.6rem;
-  transition: color 0.2s;
-}
-
-.icon-button:hover {
-  color: #00d4ff;
-}
-
-/* ==================== HUD ==================== */
-.hud {
-  position: absolute;
-  top: 4rem;
-  left: 1rem;
-  display: flex;
-  gap: 1rem;
-  z-index: 50;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-}
-
-.hud-card {
-  background: rgba(10, 14, 23, 0.8);
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  padding: 0.8rem;
-  border-radius: 2px;
-  min-width: 120px;
-}
-
-.eyebrow {
-  display: block;
-  font-size: 0.6rem;
-  color: #888;
-  text-transform: uppercase;
-  margin-bottom: 0.3rem;
-  letter-spacing: 0.1em;
-}
-
-.hud-card strong {
-  display: block;
-  font-size: 1.2rem;
-  color: #00ff00;
-  margin-bottom: 0.4rem;
-}
-
-.health-line {
-  font-size: 0.8rem;
-  margin-bottom: 0.3rem;
-}
-
-.health-line strong {
-  color: #ff4444;
-}
-
-.meter {
-  width: 100%;
-  height: 0.4rem;
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(0, 212, 255, 0.2);
-  position: relative;
-  overflow: hidden;
-}
-
-.meter i {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, #00ff00, #ffff00);
-  width: 100%;
-  animation: meter-fill 0.3s ease-out;
-}
-
-@keyframes meter-fill {
-  from { width: 0; }
-}
-
-/* ==================== CROSSHAIR ==================== */
-.crosshair {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(0, 212, 255, 0.5);
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 40;
-}
-
-.crosshair::before,
-.crosshair::after {
-  content: '';
-  position: absolute;
-  background: rgba(0, 212, 255, 0.5);
-}
-
-.crosshair::before {
-  width: 2px;
-  height: 8px;
-  left: 50%;
-  top: -10px;
-  transform: translateX(-50%);
-}
-
-.crosshair::after {
-  width: 8px;
-  height: 2px;
-  top: 50%;
-  left: -10px;
-  transform: translateY(-50%);
-}
-
-/* ==================== COMBAT HUD ==================== */
-.combat-hud {
-  position: absolute;
-  bottom: 2rem;
-  right: 1rem;
-  z-index: 50;
-  font-size: 0.75rem;
-}
-
-.ammo-readout,
-.stamina-readout {
-  background: rgba(10, 14, 23, 0.8);
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  padding: 0.8rem;
-  margin-bottom: 0.8rem;
-  border-radius: 2px;
-  min-width: 140px;
-}
-
-.ammo-readout strong {
-  color: #ffff00;
-  display: inline;
-  font-size: 1.2rem;
-  margin: 0 0.2rem;
-}
-
-.reserve-count {
-  color: #888;
-  margin-left: 0.3rem;
-  font-size: 0.7rem;
-}
-
-.stamina-readout .meter {
-  margin-top: 0.4rem;
-}
-
-.stamina-readout .meter i {
-  background: linear-gradient(90deg, #00d4ff, #0099ff);
-}
-
-/* ==================== STATUS PANEL ==================== */
-.status-panel {
-  position: absolute;
-  top: 50%;
-  right: 1rem;
-  transform: translateY(-50%);
-  background: rgba(10, 14, 23, 0.8);
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  padding: 1rem;
-  border-radius: 2px;
-  font-size: 0.75rem;
-  z-index: 50;
-  min-width: 140px;
-}
-
-.status-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 0.8rem;
-  padding-bottom: 0.8rem;
-  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
-}
-
-.status-row:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-
-.status-row span {
-  color: #888;
-  text-transform: uppercase;
-}
-
-.status-row strong {
-  color: #00ff00;
-  margin-left: 1rem;
-}
-
-/* ==================== SCREENS ==================== */
-.screen {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(10, 14, 23, 0.95);
-  backdrop-filter: blur(4px);
-  z-index: 200;
-  opacity: 1;
-  transition: opacity 0.3s ease-out;
-}
-
-.screen.hidden {
-  display: none;
-  pointer-events: none;
-}
-
-.screen-aside {
-  position: absolute;
-  bottom: 1rem;
-  left: 1rem;
-  right: 1rem;
-  font-size: 0.65rem;
-  color: #666;
-  text-align: left;
-  letter-spacing: 0.05em;
-  z-index: 50;
-}
-
-/* ==================== PANELS ==================== */
-.panel {
-  background: rgba(10, 14, 23, 0.95);
-  border: 2px solid rgba(0, 212, 255, 0.3);
-  padding: 2rem;
-  border-radius: 4px;
-  max-width: 500px;
-  width: 90%;
-  max-height: 85vh;
-  overflow-y: auto;
-  position: relative;
-}
-
-.panel-kicker {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.65rem;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 1.5rem;
-}
-
-.panel-kicker span {
-  width: 6px;
-  height: 6px;
-  background: #00d4ff;
-  display: inline-block;
-  animation: blink 2s infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
-.panel h1 {
-  font-size: 2rem;
-  font-weight: bold;
-  line-height: 1.2;
-  margin-bottom: 1rem;
-  text-transform: uppercase;
-}
-
-.panel h1 em {
-  display: block;
-  font-style: italic;
-  color: #00d4ff;
-}
-
-.panel h2 {
-  font-size: 1.8rem;
-  font-weight: bold;
-  line-height: 1.2;
-  margin-bottom: 0.8rem;
-  text-transform: uppercase;
-}
-
-.panel h2 em {
-  display: block;
-  font-style: italic;
-  color: #00d4ff;
-}
-
-.panel h3 {
-  font-size: 0.75rem;
-  font-weight: bold;
-  text-transform: uppercase;
-  color: #888;
-  margin-top: 1.5rem;
-  margin-bottom: 0.8rem;
-  letter-spacing: 0.1em;
-}
-
-.intro {
-  font-size: 0.85rem;
-  color: #aaa;
-  margin-bottom: 1.5rem;
-  line-height: 1.6;
-}
-
-.fine-print {
-  font-size: 0.65rem;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: 1.5rem;
-}
-
-/* ==================== START PANEL ==================== */
-.start-panel {
-  max-width: 600px;
-}
-
-.map-selector {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.map-option {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(0, 212, 255, 0.2);
-  padding: 0.8rem;
-  border-radius: 2px;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: left;
-  font-size: 0.75rem;
-  color: #fff;
-}
-
-.map-option:hover {
-  border-color: rgba(0, 212, 255, 0.6);
-  background: rgba(0, 212, 255, 0.1);
-}
-
-.map-option.selected {
-  border-color: #00d4ff;
-  background: rgba(0, 212, 255, 0.2);
-}
-
-.map-code {
-  font-weight: bold;
-  color: #00d4ff;
-  min-width: 2rem;
-}
-
-.map-copy strong {
-  display: block;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  margin-bottom: 0.2rem;
-}
-
-.map-copy small {
-  display: block;
-  color: #888;
-  font-size: 0.7rem;
-}
-
-/* ==================== MODE LIST ==================== */
-.mode-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.mode-option {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(0, 212, 255, 0.2);
-  padding: 0.8rem;
-  border-radius: 2px;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: left;
-  font-size: 0.75rem;
-  color: #fff;
-}
-
-.mode-option:hover {
-  border-color: rgba(0, 212, 255, 0.6);
-  background: rgba(0, 212, 255, 0.1);
-}
-
-.mode-option.selected {
-  border-color: #00d4ff;
-  background: rgba(0, 212, 255, 0.2);
-}
-
-.mode-number {
-  font-weight: bold;
-  color: #00d4ff;
-  min-width: 2rem;
-  font-size: 0.9rem;
-}
-
-.mode-copy strong {
-  display: block;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  margin-bottom: 0.2rem;
-}
-
-.mode-copy small {
-  display: block;
-  color: #888;
-  font-size: 0.7rem;
-}
-
-.mode-arrow {
-  margin-left: auto;
-  color: #00d4ff;
-}
-
-/* ==================== BUTTONS ==================== */
-.primary-button {
-  background: linear-gradient(135deg, #00d4ff, #0099ff);
-  border: none;
-  color: #000;
-  padding: 0.8rem 1.5rem;
-  font-size: 0.8rem;
-  font-weight: bold;
-  text-transform: uppercase;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: all 0.2s;
-  width: 100%;
-  margin-bottom: 1rem;
-  letter-spacing: 0.05em;
-}
-
-.primary-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
-}
-
-.primary-button:active {
-  transform: translateY(0);
-}
-
-.primary-button span {
-  margin-left: 0.5rem;
-}
-
-.text-button {
-  background: none;
-  border: none;
-  color: #00d4ff;
-  padding: 0.8rem 1.5rem;
-  font-size: 0.75rem;
-  font-weight: bold;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: color 0.2s;
-  width: 100%;
-  text-align: center;
-  letter-spacing: 0.05em;
-}
-
-.text-button:hover {
-  color: #00ffff;
-}
-
-/* ==================== HUB ACTIONS ==================== */
-.hub-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.hub-action {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(0, 212, 255, 0.2);
-  color: #fff;
-  padding: 0.7rem 1rem;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: left;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  letter-spacing: 0.05em;
-}
-
-.hub-action:hover {
-  border-color: rgba(0, 212, 255, 0.6);
-  background: rgba(0, 212, 255, 0.1);
-}
-
-.hub-action span {
-  display: block;
-}
-
-.hub-action span:last-child {
-  color: #888;
-  font-size: 0.6rem;
-}
-
-#credits-display {
-  color: #ffff00;
-  font-weight: bold;
-}
-
-/* ==================== CALLSIGN INPUT ==================== */
-.callsign-label {
-  display: block;
-  font-size: 0.65rem;
-  color: #888;
-  text-transform: uppercase;
-  margin-bottom: 0.4rem;
-  letter-spacing: 0.1em;
-}
-
-.callsign-input {
-  width: 100%;
-  padding: 0.6rem;
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  color: #fff;
-  font-family: 'Courier New', monospace;
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  margin-bottom: 1rem;
-  border-radius: 2px;
-  transition: border-color 0.2s;
-}
-
-.callsign-input:focus {
-  outline: none;
-  border-color: #00d4ff;
-  box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
-}
-
-.online-status {
-  font-size: 0.7rem;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-/* ==================== ONBOARDING SCREENS ==================== */
-.onboarding-screen {
-  background: linear-gradient(135deg, rgba(10, 14, 23, 0.95), rgba(0, 20, 40, 0.95));
-}
-
-.onboarding-panel {
-  max-width: 450px;
-}
-
-.human-check {
-  width: 100%;
-  background: rgba(0, 0, 0, 0.3);
-  border: 2px solid rgba(0, 212, 255, 0.3);
-  padding: 1.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  position: relative;
-  overflow: hidden;
-}
-
-.human-check:hover {
-  border-color: rgba(0, 212, 255, 0.6);
-  background: rgba(0, 212, 255, 0.05);
-}
-
-.human-check[aria-pressed="true"] {
-  border-color: #00ff00;
-  background: rgba(0, 255, 0, 0.1);
-}
-
-.human-core {
-  width: 2rem;
-  height: 2rem;
-  border: 2px solid rgba(0, 212, 255, 0.5);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  animation: scan 2s infinite;
-}
-
-.human-core::before {
-  content: '';
-  width: 0.4rem;
-  height: 0.4rem;
-  background: #00d4ff;
-  border-radius: 50%;
-}
-
-@keyframes scan {
-  0% {
-    box-shadow: inset 0 0 0 0 rgba(0, 212, 255, 0.5);
-  }
-  100% {
-    box-shadow: inset 0 0 0 8px rgba(0, 212, 255, 0);
-  }
-}
-
-.human-check strong {
-  display: block;
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  color: #fff;
-}
-
-.human-check small {
-  display: block;
-  font-size: 0.7rem;
-  color: #888;
-}
-
-/* ==================== SHOP SCREEN ==================== */
-.shop-panel {
-  max-width: 650px;
-}
-
-.shop-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1rem;
-  gap: 2rem;
-}
-
-.shop-heading h2 {
-  flex: 1;
-}
-
-.shop-heading strong {
-  font-size: 0.8rem;
-  color: #ffff00;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.shop-section-title {
-  font-size: 0.7rem;
-  font-weight: bold;
-  text-transform: uppercase;
-  color: #888;
-  margin-top: 1.5rem;
-  margin-bottom: 0.8rem;
-  letter-spacing: 0.1em;
-}
-
-.shop-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 0.8rem;
-  margin-bottom: 1rem;
-}
-
-.shop-item {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(0, 212, 255, 0.2);
-  padding: 0.8rem;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: center;
-  font-size: 0.7rem;
-}
-
-.shop-item:hover {
-  border-color: rgba(0, 212, 255, 0.6);
-  background: rgba(0, 212, 255, 0.1);
-}
-
-.shop-item.purchased {
-  border-color: #00ff00;
-  background: rgba(0, 255, 0, 0.1);
-}
-
-.shop-item-name {
-  display: block;
-  font-weight: bold;
-  text-transform: uppercase;
-  margin-bottom: 0.3rem;
-  color: #fff;
-}
-
-.shop-item-price {
-  color: #ffff00;
-  font-weight: bold;
-}
-
-.shop-item-status {
-  display: block;
-  font-size: 0.6rem;
-  color: #888;
-  margin-top: 0.2rem;
-}
-
-/* ==================== AVATAR SCREEN ==================== */
-.avatar-panel {
-  max-width: 700px;
-}
-
-.avatar-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 2rem;
-  margin-bottom: 2rem;
-}
-
-.avatar-heading strong {
-  font-size: 0.8rem;
-  color: #00d4ff;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.avatar-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  margin-bottom: 2rem;
-  align-items: center;
-}
-
-.avatar-preview {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  padding: 2rem;
-  border-radius: 4px;
-  aspect-ratio: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  font-size: 4rem;
-  color: #00d4ff;
-}
-
-.avatar-helmet,
-.avatar-head,
-.avatar-visor,
-.avatar-body,
-.avatar-arm,
-.avatar-leg,
-.avatar-rifle {
-  position: absolute;
-  display: block;
-}
-
-.avatar-summary {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  padding: 1rem;
-  border-radius: 2px;
-}
-
-.avatar-summary strong {
-  display: block;
-  font-size: 1.1rem;
-  text-transform: uppercase;
-  color: #00ff00;
-  margin-bottom: 0.3rem;
-}
-
-.avatar-summary small {
-  display: block;
-  font-size: 0.7rem;
-  color: #888;
-}
-
-.skin-choices {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.8rem;
-  margin-bottom: 1.5rem;
-}
-
-.skin-choice {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(0, 212, 255, 0.2);
-  padding: 1rem;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: center;
-  font-size: 2rem;
-}
-
-.skin-choice:hover {
-  border-color: rgba(0, 212, 255, 0.6);
-  background: rgba(0, 212, 255, 0.1);
-}
-
-.skin-choice.selected {
-  border-color: #00d4ff;
-  background: rgba(0, 212, 255, 0.2);
-}
-
-/* ==================== PAUSE & RESULT SCREENS ==================== */
-.compact-panel {
-  max-width: 400px;
-  text-align: center;
-}
-
-.compact-panel .intro {
-  text-align: center;
-}
-
-#result-title {
-  color: #00ff00;
-}
-
-#result-title em {
-  color: #00d4ff;
-}
-
-/* ==================== MOBILE CONTROLS ==================== */
-.mobile-controls {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: none;
-  background: rgba(10, 14, 23, 0.9);
-  padding: 1rem;
-  gap: 1rem;
-  align-items: center;
-  font-size: 0.7rem;
-  z-index: 50;
-  border-top: 1px solid rgba(0, 212, 255, 0.2);
-}
-
-.reload-button {
-  background: rgba(0, 212, 255, 0.2);
-  border: 1px solid rgba(0, 212, 255, 0.4);
-  color: #00d4ff;
-  padding: 0.6rem 1rem;
-  border-radius: 2px;
-  cursor: pointer;
-  font-size: 0.7rem;
-  font-weight: bold;
-  text-transform: uppercase;
-  flex: 1;
-  transition: all 0.2s;
-}
-
-.reload-button:active {
-  background: rgba(0, 212, 255, 0.4);
-}
-
-@media (max-width: 768px) {
-  .mobile-controls {
-    display: flex;
-  }
-
-  .screen-aside {
-    display: none;
-  }
-
-  .avatar-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .panel {
-    max-width: 95vw;
-  }
-}
-
-/* ==================== BOTTOM HINT ==================== */
-.bottom-hint {
-  position: absolute;
-  bottom: 1rem;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.65rem;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  text-align: center;
-  z-index: 30;
-}
-
-@media (max-width: 768px) {
-  .bottom-hint {
-    display: none;
-  }
-}
-
-/* ==================== SCROLLBAR STYLING ==================== */
-.panel::-webkit-scrollbar {
-  width: 8px;
-}
-
-.panel::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 4px;
-}
-
-.panel::-webkit-scrollbar-thumb {
-  background: rgba(0, 212, 255, 0.3);
-  border-radius: 4px;
-}
-
-.panel::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 212, 255, 0.6);
-}
-
-/* ==================== ANIMATIONS ==================== */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.panel {
-  animation: fadeIn 0.3s ease-out;
-}
