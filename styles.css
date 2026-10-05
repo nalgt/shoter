@@ -1,226 +1,209 @@
-:root {
-  color-scheme: dark;
-  --ink: #101721;
-  --panel: rgba(17, 25, 35, .94);
-  --text: #f0f2ee;
-  --muted: #929ba3;
-  --lime: #d8ff57;
-  --line: rgba(226, 234, 229, .13);
-  font-family: Inter, sans-serif;
-}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#101721">
+    <meta name="description" content="Outpost — browser arena shooter with maps, loadouts, and bot combat.">
+    <title>Outpost — Browser Arena</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="game-shell">
+      <canvas id="game" aria-label="Game arena"></canvas>
 
-* { box-sizing: border-box; }
-html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--ink); }
-body { color: var(--text); }
-button { font: inherit; }
-.game-shell { position: relative; width: 100%; height: 100%; min-height: 420px; overflow: hidden; isolation: isolate; background: #17222a; }
-#game { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-.game-shell.playing.first-person { cursor: none; }
-.game-shell.first-person:not(.playing) { cursor: default; }
-.topbar { position: absolute; z-index: 2; inset: 0 0 auto; height: 74px; padding: 0 4.3%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,.08); background: linear-gradient(180deg, rgba(13,19,26,.77), rgba(13,19,26,.16)); }
-.brand { display: flex; gap: 11px; align-items: center; color: var(--text); font-size: 17px; font-weight: 800; letter-spacing: .11em; text-decoration: none; }
-.brand-mark { width: 33px; height: 33px; display: grid; place-items: center; border: 2px solid var(--lime); color: var(--lime); font: 800 21px "Barlow Condensed", sans-serif; transform: skew(-7deg); }
-.brand small { display: block; margin-top: 2px; color: #929ba3; font: 9px "DM Mono", monospace; letter-spacing: .16em; }
-.topbar-right { display: flex; align-items: center; gap: 20px; }
-.online-indicator, .eyebrow, .bottom-hint, .fine-print, .panel-kicker, .screen-aside { font: 10px "DM Mono", monospace; letter-spacing: .12em; }
-.online-indicator { color: #c1c9c6; }
-.online-indicator i, .panel-kicker span { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 12px rgba(216,255,87,.65); }
-.icon-button { width: 36px; height: 36px; border: 1px solid var(--line); background: rgba(20,29,38,.65); color: var(--text); cursor: pointer; font-size: 15px; }
-.hud { position: absolute; z-index: 2; top: 100px; left: 3.5%; right: 3.5%; display: flex; align-items: flex-start; justify-content: space-between; pointer-events: none; }
-.hud-card { min-width: 185px; padding: 15px 18px; background: rgba(17,25,35,.78); border: 1px solid var(--line); backdrop-filter: blur(10px); }
-.eyebrow { display: block; color: #9da7a8; font-size: 9px; }
-.health-line { margin: 5px 0 8px; font: 800 22px "Barlow Condensed", sans-serif; }
-.health-line span { color: var(--muted); font-size: 14px; }
-.meter { height: 3px; background: rgba(255,255,255,.13); }
-.meter i { display: block; width: 100%; height: 100%; background: var(--lime); transition: width .15s; }
-.objective-card { min-width: 240px; text-align: center; }
-.objective-card strong { display: block; margin-top: 7px; font: 700 20px "Barlow Condensed", sans-serif; letter-spacing: .05em; }
-.objective-card strong b { color: var(--lime); }
-.objective-card > span:last-child { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
-.clock-card { min-width: 145px; text-align: right; }
-.clock-card strong { display: block; margin-top: 5px; font: 700 25px "DM Mono", monospace; }
-.screen { position: absolute; z-index: 4; inset: 0; display: grid; place-items: center; padding: 85px 18px 60px; background: linear-gradient(90deg, rgba(10,16,21,.88) 0%, rgba(10,16,21,.73) 39%, rgba(10,16,21,.17) 100%), linear-gradient(0deg, rgba(10,16,21,.5), transparent 30%); }
-.screen.hidden { display: none; }
-.onboarding-screen { background: radial-gradient(circle at 72% 28%, rgba(216,255,87,.14), transparent 27%), linear-gradient(120deg, rgba(8,14,19,.96), rgba(14,23,29,.76)); }
-.onboarding-panel { width: min(460px, 100%); }
-.human-check { width: 100%; min-height: 92px; display: flex; align-items: center; gap: 17px; padding: 16px 18px; border: 1px solid rgba(216,255,87,.62); background: rgba(216,255,87,.07); color: var(--text); text-align: left; cursor: pointer; transition: transform .16s, background .16s, border-color .16s; }
-.human-check:hover { transform: translateY(-2px); background: rgba(216,255,87,.14); }
-.human-check.verified { border-color: var(--lime); background: rgba(216,255,87,.19); }
-.human-core { width: 46px; height: 46px; flex: 0 0 auto; border: 2px solid var(--lime); border-radius: 50%; background: radial-gradient(circle, var(--lime) 0 22%, transparent 25%); box-shadow: 0 0 0 7px rgba(216,255,87,.08), 0 0 22px rgba(216,255,87,.32); }
-.human-check strong, .human-check small { display: block; }
-.human-check strong { font: 800 16px "DM Mono", monospace; letter-spacing: .07em; }
-.human-check small { margin-top: 5px; color: var(--muted); font-size: 11px; }
-.panel { width: min(500px, 100%); padding: 29px 39px 31px; background: var(--panel); border: 1px solid rgba(228,237,226,.16); box-shadow: 0 22px 80px rgba(0,0,0,.32); backdrop-filter: blur(18px); }
-.panel-kicker { color: var(--lime); font-size: 9px; }
-.panel-kicker span { width: 6px; height: 6px; }
-h1, h2 { margin: 17px 0 10px; font: 900 68px/.83 "Barlow Condensed", sans-serif; letter-spacing: -.015em; }
-h1 em, h2 em { color: var(--lime); font-style: normal; }
-h2 { font-size: 52px; }
-.intro { max-width: 350px; margin: 15px 0 23px; color: #aab3b6; font-size: 14px; line-height: 1.6; }
-.mode-list { display: grid; gap: 7px; }
-.mode-option { width: 100%; min-height: 68px; display: flex; align-items: center; gap: 14px; padding: 11px 14px; border: 1px solid rgba(230,240,232,.1); background: rgba(255,255,255,.025); color: var(--text); text-align: left; cursor: pointer; transition: background .16s, border-color .16s, transform .16s; }
-.mode-option:hover { transform: translateX(2px); border-color: rgba(216,255,87,.55); }
-.mode-option.selected { border-color: var(--lime); background: rgba(216,255,87,.075); }
-.mode-number { width: 22px; color: var(--lime); font: 12px "DM Mono", monospace; }
-.mode-copy { flex: 1; }
-.mode-copy strong { display: block; font: 700 16px "Barlow Condensed", sans-serif; letter-spacing: .07em; }
-.mode-copy small { display: block; margin-top: 4px; color: #98a1a4; font-size: 11px; line-height: 1.4; }
-.mode-arrow { color: var(--lime); font-size: 15px; }
-.hub-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
-.hub-action { min-height: 42px; padding: 7px 10px; border: 1px solid var(--line); background: rgba(255,255,255,.035); color: var(--text); font: 10px "DM Mono", monospace; letter-spacing: .07em; cursor: pointer; }
-.hub-action span { display: block; margin-top: 3px; color: var(--lime); font-size: 9px; }
-.hub-action.selected { border-color: var(--lime); background: rgba(216,255,87,.1); }
-.callsign-label { display: block; margin: 10px 0 4px; color: var(--muted); font: 9px "DM Mono", monospace; letter-spacing: .12em; }
-.callsign-input { width: 100%; height: 35px; padding: 0 10px; border: 1px solid var(--line); outline: 0; background: rgba(255,255,255,.045); color: var(--text); }
-.callsign-input:focus { border-color: var(--lime); }
-.online-status { min-height: 14px; margin: 6px 0 0; color: #9da7a8; font: 10px "DM Mono", monospace; }
-.shop-panel { width: min(690px, 100%); max-height: min(86vh, 900px); overflow-y: auto; }
-.shop-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
-.shop-heading h2 { margin-bottom: 0; }
-.shop-heading > strong { color: var(--lime); font: 12px "DM Mono", monospace; white-space: nowrap; }
-.shop-section-title { margin: 17px 0 7px; color: var(--lime); font: 11px "DM Mono", monospace; letter-spacing: .13em; }
-.shop-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.shop-card { min-width: 0; padding: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.035); }
-.shop-card.equipped { border-color: rgba(216,255,87,.72); background: rgba(216,255,87,.07); }
-.shop-card h4 { margin: 0; font: 700 15px "Barlow Condensed", sans-serif; letter-spacing: .04em; }
-.shop-card p { min-height: 32px; margin: 6px 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
-.shop-card .weapon-stats { color: #c4ccc8; font: 9px "DM Mono", monospace; }
-.shop-card button { width: 100%; min-height: 32px; margin-top: 9px; border: 1px solid rgba(216,255,87,.5); background: transparent; color: var(--lime); font: 9px "DM Mono", monospace; cursor: pointer; }
-.shop-card button:disabled { border-color: var(--line); color: var(--muted); cursor: default; }
-.avatar-panel { width: min(690px, 100%); max-height: min(86vh, 900px); overflow-y: auto; }
-.avatar-heading { display: flex; align-items: end; justify-content: space-between; gap: 14px; }
-.avatar-heading h2 { margin-bottom: 0; }
-.avatar-heading > strong { color: var(--lime); font: 12px "DM Mono", monospace; white-space: nowrap; }
-.avatar-layout { display: grid; grid-template-columns: 165px 1fr; align-items: center; gap: 22px; margin: 12px 0 17px; padding: 16px; border: 1px solid var(--line); background: radial-gradient(circle at 50% 35%, rgba(216,255,87,.13), transparent 48%), rgba(255,255,255,.025); }
-.avatar-preview { --armor: #536d52; --dark: #263127; position: relative; width: 126px; height: 188px; margin: 0 auto; filter: drop-shadow(0 14px 12px rgba(0,0,0,.35)); }
-.avatar-preview[data-skin="arctic"] { --armor: #8aaab5; --dark: #374a55; }
-.avatar-preview[data-skin="crimson"] { --armor: #b5564d; --dark: #542d2b; }
-.avatar-preview span { position: absolute; display: block; }
-.avatar-helmet { z-index: 2; top: 7px; left: 38px; width: 50px; height: 41px; border: 4px solid var(--armor); border-radius: 50% 50% 38% 38%; background: var(--dark); }
-.avatar-head { z-index: 1; top: 27px; left: 47px; width: 32px; height: 30px; border-radius: 0 0 44% 44%; background: #c5a98a; }
-.avatar-visor { z-index: 3; top: 27px; left: 43px; width: 41px; height: 12px; border: 2px solid #d8ff57; background: #152328; box-shadow: 0 0 9px rgba(216,255,87,.35); }
-.avatar-body { z-index: 2; top: 55px; left: 32px; width: 61px; height: 66px; border: 5px solid var(--armor); border-radius: 18px 18px 11px 11px; background: var(--dark); }
-.avatar-arm { z-index: 1; top: 62px; width: 18px; height: 62px; border-radius: 12px; background: var(--armor); transform-origin: top center; }
-.avatar-arm-left { left: 24px; transform: rotate(17deg); }.avatar-arm-right { right: 26px; transform: rotate(-28deg); }
-.avatar-leg { z-index: 1; top: 114px; width: 21px; height: 61px; border-radius: 7px 7px 4px 4px; background: var(--dark); border-bottom: 8px solid #e0dfc7; }
-.avatar-leg-left { left: 42px; transform: rotate(3deg); }.avatar-leg-right { left: 70px; transform: rotate(-3deg); }
-.avatar-rifle { z-index: 4; top: 82px; left: 65px; width: 12px; height: 87px; border: 2px solid #c9ccbd; border-radius: 3px; background: #394449; transform: rotate(47deg); }
-.avatar-summary strong { display: block; margin: 7px 0 4px; color: var(--lime); font: 800 32px "Barlow Condensed", sans-serif; letter-spacing: .06em; }
-.avatar-summary small { color: var(--muted); font-size: 11px; }
-.skin-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.skin-choice { min-height: 84px; padding: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.035); color: var(--text); text-align: left; cursor: pointer; }
-.skin-choice:hover { border-color: rgba(216,255,87,.6); }.skin-choice.selected { border-color: var(--lime); background: rgba(216,255,87,.08); }
-.skin-choice:disabled { color: var(--muted); cursor: not-allowed; }
-.skin-choice strong, .skin-choice small { display: block; }.skin-choice strong { font: 700 15px "Barlow Condensed", sans-serif; letter-spacing: .06em; }.skin-choice small { margin-top: 6px; color: var(--muted); font: 9px "DM Mono", monospace; }
-.mode-option:disabled { opacity: .45; cursor: not-allowed; transform: none; }
-.primary-button { width: 100%; min-height: 56px; margin-top: 20px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; border: 0; background: var(--lime); color: #172018; font: 800 14px "DM Mono", monospace; letter-spacing: .1em; cursor: pointer; transition: background .15s, transform .15s; }
-.primary-button:hover { transform: translateY(-2px); background: #e5ff92; }
-.primary-button:disabled { cursor: not-allowed; opacity: .55; transform: none; }
-.primary-button span { font-size: 20px; }
-.fine-print { margin: 13px 0 0; color: #7c878b; text-align: center; font-size: 8px; }
-.screen-aside { position: absolute; left: 4.3%; bottom: 23px; color: #a0aaab; font-size: 9px; }
-.screen-aside span, .bottom-hint span { margin: 0 8px; color: var(--lime); }
-.compact-panel { width: min(380px, 100%); }
-.text-button { display: block; margin: 14px auto 0; border: 0; background: transparent; color: #a6afb0; font: 10px "DM Mono", monospace; letter-spacing: .07em; cursor: pointer; }
-.bottom-hint { position: absolute; z-index: 2; bottom: 22px; right: 4.3%; color: #d0d7d2; font-size: 9px; pointer-events: none; }
-.crosshair { position: absolute; z-index: 3; width: 17px; height: 17px; display: none; border: 1px solid rgba(216,255,87,.9); border-radius: 50%; transform: translate(-50%,-50%); pointer-events: none; }
-.crosshair::after { position: absolute; content: ""; inset: 6px; border-radius: 50%; background: var(--lime); }
-.combat-hud { position: absolute; z-index: 2; left: 4.3%; bottom: 52px; width: 190px; padding: 11px 14px; border: 1px solid var(--line); background: rgba(17,25,35,.78); backdrop-filter: blur(10px); pointer-events: none; }
-.ammo-readout { display: flex; align-items: baseline; gap: 6px; }
-.ammo-readout .eyebrow { margin-right: auto; }
-.ammo-readout strong { font: 800 22px "DM Mono", monospace; color: var(--lime); }
-.reserve-count { color: var(--muted); font: 12px "DM Mono", monospace; }
-.stamina-readout { margin-top: 8px; }
-.stamina-readout .eyebrow { margin-bottom: 5px; }
-#stamina-meter { width: 100%; background: #71ddec; transition: width .12s; }
-#stamina-meter.draining { background: var(--lime); }
-.game-shell.first-person .crosshair { display: block !important; left: 50%; top: 50%; width: 20px; height: 20px; border-color: rgba(240,242,238,.95); box-shadow: 0 0 5px rgba(0,0,0,.8); }
-.game-shell.first-person .crosshair::after { inset: 8px; background: var(--lime); box-shadow: 0 0 5px rgba(0,0,0,.8); }
-.mobile-controls { display: none; position: absolute; z-index: 2; inset: auto 0 max(13px, env(safe-area-inset-bottom)) 0; align-items: center; justify-content: center; gap: 8px; color: rgba(240,242,238,.7); font: 9px "DM Mono", monospace; letter-spacing: .07em; pointer-events: none; text-shadow: 0 1px 4px #101721; }
-.mobile-controls i { width: 4px; height: 4px; border-radius: 50%; background: var(--lime); }
-.reload-button { display: none; min-height: 34px; padding: 0 10px; border: 1px solid rgba(216,255,87,.55); background: rgba(17,25,35,.9); color: var(--lime); font: 9px "DM Mono", monospace; letter-spacing: .05em; pointer-events: auto; touch-action: manipulation; }
-.reload-button:disabled { opacity: .45; }
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Outpost home">
+          <span class="brand-mark">O</span>
+          <span>OUTPOST<small>ARENA PROTOCOL</small></span>
+        </a>
+        <div class="topbar-right">
+          <span class="online-indicator" id="online-indicator"><i></i> BOT MATCH · 3D</span>
+          <button id="pause-button" class="icon-button" type="button" aria-label="Pause game" title="Pause">Ⅱ</button>
+        </div>
+      </header>
 
-@media (max-width: 650px) {
-  .topbar { height: 59px; padding: 0 17px; }
-  .brand { font-size: 14px; }
-  .brand-mark { width: 29px; height: 29px; }
-  .online-indicator { font-size: 8px; }
-  .hud { top: 70px; left: 9px; right: 9px; gap: 6px; }
-  .hud-card { min-width: 0; padding: 10px 9px; }
-  .health-card { width: 27%; }
-  .objective-card { flex: 1; }
-  .clock-card { width: 22%; }
-  .objective-card strong { font-size: 14px; }
-  .objective-card > span:last-child { font-size: 8px; }
-  .clock-card strong { font-size: 17px; }
-  .eyebrow { font-size: 8px; }
-  .health-line { font-size: 18px; }
-  .screen { padding: 82px 14px 30px; place-items: center; background: linear-gradient(90deg, rgba(10,16,21,.84), rgba(10,16,21,.48)), linear-gradient(0deg, rgba(10,16,21,.48), transparent 30%); }
-  .panel { width: min(460px, 100%); padding: 22px 23px 24px; }
-  h1 { margin-top: 14px; font-size: 57px; }
-  h2 { font-size: 50px; }
-  .intro { margin: 12px 0 18px; font-size: 12px; }
-  .mode-option { min-height: 61px; }
-  .mode-copy strong { font-size: 15px; }
-  .mode-copy small { font-size: 10px; }
-  .start-panel { max-height: calc(100dvh - 92px); overflow-y: auto; padding: 16px 18px; }
-  .start-panel h1 { font-size: 45px; }
-  .start-panel .intro { margin: 7px 0 10px; }
-  .start-panel .mode-list { gap: 5px; }
-  .start-panel .mode-option { min-height: 49px; padding: 7px 10px; }
-  .start-panel .mode-copy small { margin-top: 2px; font-size: 9px; }
-  .start-panel .primary-button { min-height: 42px; margin-top: 11px; }
-  .hub-action { min-height: 36px; }
-  .hub-actions { grid-template-columns: 1fr 1fr; }
-  .callsign-label { margin-top: 7px; }
-  .callsign-input { height: 31px; }
-  .online-status { margin-top: 4px; }
-  .start-panel .fine-print { margin-top: 6px; }
-  .onboarding-panel { padding: 25px 23px; }
-  .onboarding-panel h1 { font-size: 48px; }
-  .shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .shop-panel { padding: 18px; }
-  .avatar-panel { padding: 18px; }
-  .avatar-heading h2 { font-size: 39px; }
-  .avatar-layout { grid-template-columns: 125px 1fr; gap: 9px; padding: 10px; }
-  .avatar-preview { transform: scale(.8); transform-origin: center; margin: -18px auto; }
-  .skin-choices { grid-template-columns: 1fr; }
-  .shop-heading h2 { font-size: 39px; }
-  .shop-panel .intro { margin: 10px 0; }
-  .screen-aside { display: none; }
-  .bottom-hint { display: none; }
-  .combat-hud { left: 10px; bottom: max(47px, calc(env(safe-area-inset-bottom) + 42px)); width: 145px; padding: 8px 10px; }
-  .ammo-readout strong { font-size: 18px; }
-  .reserve-count { font-size: 10px; }
-  .mobile-controls { display: flex; opacity: 0; visibility: hidden; transition: opacity .15s; }
-  .mobile-controls.active { opacity: 1; visibility: visible; }
-  .mobile-controls.active .reload-button { display: inline-block; }
-  .mobile-controls.active .weapon-switch-button { display: inline-block; }
-  .icon-button { width: 32px; height: 32px; }
-  .crosshair { display: none !important; }
-}
-@media (max-height: 650px) and (min-width: 651px) {
-  .panel { padding-top: 18px; padding-bottom: 19px; }
-  h1 { font-size: 55px; margin-top: 11px; }
-  .intro { margin: 9px 0 13px; }
-  .mode-option { min-height: 54px; }
-  .primary-button { min-height: 48px; margin-top: 14px; }
-}
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
-@media (pointer: coarse) {
-  .mobile-controls { display: flex; opacity: 0; visibility: hidden; transition: opacity .15s; }
-  .mobile-controls.active { opacity: 1; visibility: visible; }
-  .mobile-controls.active .reload-button { display: inline-block; }
-  .mobile-controls.active .weapon-switch-button { display: inline-block; }
-  .bottom-hint { display: none; }
-}
-@media (max-width: 650px) and (max-height: 720px) {
-  .screen { padding-top: 67px; padding-bottom: 12px; overflow-y: auto; }
-  .panel { padding-top: 16px; padding-bottom: 17px; }
-  h1 { margin-top: 10px; font-size: 49px; }
-  .intro { margin: 8px 0 12px; }
-  .mode-option { min-height: 51px; }
-  .primary-button { min-height: 45px; margin-top: 12px; }
-  .fine-print { margin-top: 8px; }
-}
+      <section class="hud" aria-live="polite">
+        <div class="hud-card health-card">
+          <span class="eyebrow">VITALS</span>
+          <div class="health-line"><strong id="health-value">100</strong><span> / 100</span></div>
+          <div class="meter"><i id="health-meter"></i></div>
+        </div>
+        <div class="hud-card objective-card">
+          <span class="eyebrow" id="mode-label">FREE FOR ALL</span>
+          <strong id="objective-value">ELIMINATIONS <b>0</b></strong>
+          <span id="objective-subtitle">Outlast the arena</span>
+        </div>
+        <div class="hud-card clock-card">
+          <span class="eyebrow">MATCH TIME</span>
+          <strong id="clock-value">00:00</strong>
+        </div>
+      </section>
+
+      <div class="crosshair" id="crosshair" aria-hidden="true"></div>
+
+      <section class="combat-hud" aria-label="Combat status">
+        <div class="ammo-readout"><span class="eyebrow">RIFLE AMMO</span><strong id="ammo-value">30</strong><span class="reserve-count">/ <span id="reserve-value">120</span></span></div>
+        <div class="stamina-readout"><span class="eyebrow">SPRINT ENERGY</span><div class="meter"><i id="stamina-meter"></i></div></div>
+      </section>
+
+      <aside class="status-panel" id="status-panel" aria-live="polite">
+        <div class="status-row"><span>MAP</span><strong id="map-label">HARBOR</strong></div>
+        <div class="status-row"><span>LOADOUT</span><strong id="loadout-label">RIFLE</strong></div>
+        <div class="status-row"><span>FOCUS</span><strong id="focus-label">TARGET LOCK</strong></div>
+      </aside>
+
+      <section id="start-screen" class="screen">
+        <div class="panel start-panel">
+          <div class="panel-kicker"><span></span> OUTPOST // COMMAND HUB</div>
+          <h1>GEAR UP.<br><em>DEPLOY.</em></h1>
+          <p class="intro">Choose a map, tune your weapons, and fight for control of the arena.</p>
+
+          <div class="map-selector" aria-label="Choose a map">
+            <button class="map-option selected" data-map="harbor" type="button">
+              <span class="map-code">01</span>
+              <span class="map-copy"><strong>HARBOR</strong><small>Open lanes, cover, and chokepoints.</small></span>
+            </button>
+            <button class="map-option" data-map="fortress" type="button">
+              <span class="map-code">02</span>
+              <span class="map-copy"><strong>FORTRESS</strong><small>Dense walls and cross-fire routes.</small></span>
+            </button>
+            <button class="map-option" data-map="metro" type="button">
+              <span class="map-code">03</span>
+              <span class="map-copy"><strong>METRO</strong><small>Vertical combat with tight sightlines.</small></span>
+            </button>
+          </div>
+
+          <div class="mode-list" role="group" aria-label="Choose a game mode">
+            <button class="mode-option selected" data-mode="ffa" type="button">
+              <span class="mode-number">01</span>
+              <span class="mode-copy"><strong>FREE FOR ALL</strong><small>Every bot for itself.</small></span>
+              <span class="mode-arrow">↗</span>
+            </button>
+            <button class="mode-option" data-mode="survival" type="button">
+              <span class="mode-number">02</span>
+              <span class="mode-copy"><strong>SURVIVAL</strong><small>Hold out against endless waves.</small></span>
+              <span class="mode-arrow">↗</span>
+            </button>
+            <button class="mode-option" data-mode="waves" type="button">
+              <span class="mode-number">03</span>
+              <span class="mode-copy"><strong>WAVES</strong><small>Clear ten escalating assault waves.</small></span>
+              <span class="mode-arrow">↗</span>
+            </button>
+            <button class="mode-option" data-mode="territory" type="button">
+              <span class="mode-number">04</span>
+              <span class="mode-copy"><strong>TERRITORY WAR</strong><small>Capture and defend the objective.</small></span>
+              <span class="mode-arrow">↗</span>
+            </button>
+          </div>
+
+          <button id="play-button" class="primary-button" type="button">DEPLOY <span>→</span></button>
+
+          <div class="hub-actions">
+            <button id="shop-open" class="hub-action" type="button">WEAPON ARMORY <span id="credits-display">CREDITS 200</span></button>
+            <button id="avatar-open" class="hub-action" type="button">OPERATIVE <span>LOOKS &amp; LOADOUT</span></button>
+            <button id="online-toggle" class="hub-action" type="button">ONLINE: OFF</button>
+          </div>
+
+          <label class="callsign-label" for="callsign-input">CALLSIGN</label>
+          <input id="callsign-input" class="callsign-input" maxlength="18" autocomplete="nickname" value="Ranger">
+          <p id="online-status" class="online-status" aria-live="polite">Solo match · bots only</p>
+          <p class="fine-print">SOLO READY · AI BOTS · FREE TO PLAY</p>
+        </div>
+        <div class="screen-aside">PC: FIRST PERSON · WASD MOVE · MOUSE LOOK · CLICK / SPACE FIRE · ESC PAUSE <span>·</span> PHONE: THIRD PERSON</div>
+      </section>
+
+      <section id="human-screen" class="screen onboarding-screen hidden" aria-labelledby="human-title">
+        <div class="panel onboarding-panel">
+          <div class="panel-kicker"><span></span> OUTPOST // ACCESS CHECK</div>
+          <h1 id="human-title">ARE YOU<br><em>HUMAN?</em></h1>
+          <p class="intro">Complete the quick security check before entering the command hub.</p>
+          <button id="human-check" class="human-check" type="button" aria-pressed="false">
+            <span class="human-core" aria-hidden="true"></span>
+            <span><strong>I AM HUMAN</strong><small>Tap to verify your access</small></span>
+          </button>
+          <p id="human-status" class="online-status" aria-live="polite">Verification required</p>
+        </div>
+      </section>
+
+      <section id="account-screen" class="screen onboarding-screen hidden" aria-labelledby="account-title">
+        <form id="account-form" class="panel onboarding-panel">
+          <div class="panel-kicker"><span></span> OUTPOST // NEW ACCOUNT</div>
+          <h1 id="account-title">CREATE YOUR<br><em>CALLSIGN.</em></h1>
+          <p class="intro">Your callsign, account setup, and arena progress are saved on this device.</p>
+          <label class="callsign-label" for="account-callsign">CALLSIGN</label>
+          <input id="account-callsign" class="callsign-input" maxlength="18" autocomplete="nickname" placeholder="Ranger" required>
+          <button class="primary-button" type="submit">ENTER COMMAND HUB <span>→</span></button>
+          <p class="fine-print">3 LOCAL SAVE COOKIES · NO EMAIL REQUIRED</p>
+        </form>
+      </section>
+
+      <section id="shop-screen" class="screen hidden" aria-label="Weapon shop">
+        <div class="panel shop-panel">
+          <div class="panel-kicker"><span></span> COMMAND HUB // ARMORY</div>
+          <div class="shop-heading"><h2>CHOOSE YOUR<br><em>LOADOUT.</em></h2><strong id="shop-credits">200 CREDITS</strong></div>
+          <p class="intro">Weapons are sidegrades, not pay-to-win. Buy once and keep them.</p>
+          <h3 class="shop-section-title">PRIMARY</h3>
+          <div id="primary-shop" class="shop-grid"></div>
+          <h3 class="shop-section-title">SECONDARY</h3>
+          <div id="secondary-shop" class="shop-grid"></div>
+          <button id="shop-close" class="primary-button" type="button">BACK TO HUB <span>→</span></button>
+        </div>
+      </section>
+
+      <section id="avatar-screen" class="screen hidden" aria-label="Operative appearance">
+        <div class="panel avatar-panel">
+          <div class="panel-kicker"><span></span> COMMAND HUB // OPERATIVE BAY</div>
+          <div class="avatar-heading">
+            <div>
+              <h2>CHOOSE YOUR<br><em>OPERATIVE.</em></h2>
+              <p class="intro">This is the avatar that enters the online lobby and appears in third-person play.</p>
+            </div>
+            <strong id="avatar-credits">200 CREDITS</strong>
+          </div>
+          <div class="avatar-layout">
+            <div id="avatar-preview" class="avatar-preview" data-skin="ranger" aria-label="Your operative preview">
+              <span class="avatar-helmet"></span><span class="avatar-head"></span><span class="avatar-visor"></span>
+              <span class="avatar-body"></span><span class="avatar-arm avatar-arm-left"></span><span class="avatar-arm avatar-arm-right"></span>
+              <span class="avatar-leg avatar-leg-left"></span><span class="avatar-leg avatar-leg-right"></span>
+              <span class="avatar-rifle"></span>
+            </div>
+            <div class="avatar-summary"><span class="eyebrow">ACTIVE OPERATIVE</span><strong id="avatar-callsign">RANGER</strong><small>Saved with your local progress</small></div>
+          </div>
+          <div id="skin-choices" class="skin-choices" aria-label="Choose operative look"></div>
+          <button id="avatar-close" class="primary-button" type="button">BACK TO HUB <span>→</span></button>
+        </div>
+      </section>
+
+      <section id="pause-screen" class="screen hidden">
+        <div class="panel compact-panel">
+          <div class="panel-kicker"><span></span> MATCH PAUSED</div>
+          <h2>TAKE A<br><em>BREATHER.</em></h2>
+          <p class="intro">Your arena will be right here.</p>
+          <button id="resume-button" class="primary-button" type="button">BACK TO GAME <span>→</span></button>
+          <button id="menu-button" class="text-button" type="button">CHANGE MODE</button>
+        </div>
+      </section>
+
+      <section id="result-screen" class="screen hidden">
+        <div class="panel compact-panel">
+          <div class="panel-kicker"><span></span> MATCH COMPLETE</div>
+          <h2 id="result-title">NICE<br><em>WORK.</em></h2>
+          <p id="result-copy" class="intro">The arena remembers.</p>
+          <button id="again-button" class="primary-button" type="button">PLAY AGAIN <span>→</span></button>
+          <button id="result-menu-button" class="text-button" type="button">CHOOSE ANOTHER MODE</button>
+        </div>
+      </section>
+
+      <div id="mobile-controls" class="mobile-controls" aria-label="Touch controls">
+        <span>LEFT SIDE · MOVE</span><i></i><span>RIGHT SIDE · AIM + FIRE</span>
+        <button id="weapon-switch-button" class="reload-button" type="button">SWAP</button>
+        <button id="reload-button" class="reload-button" type="button">RELOAD</button>
+      </div>
+      <div class="bottom-hint" id="game-hint">WASD MOVE · SHIFT SPRINT · MOUSE LOOK / AIM · CLICK FIRE · 1/2 SWAP · R RELOAD · ESC PAUSE</div>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>
