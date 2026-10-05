@@ -1,324 +1,689 @@
-import { createReadStream, existsSync, statSync } from "node:fs";
-import { createServer } from "node:http";
-import { createHash, randomUUID } from "node:crypto";
-import { extname, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-const root = fileURLToPath(new URL(".", import.meta.url));
-const port = Number.parseInt(process.env.PORT || "3000", 10);
-const maxPlayers = 24;
-const allowedModes = new Set(["ffa", "survival", "waves", "territory"]);
-const allowedMaps = new Set(["harbor", "fortress", "metro"]);
-const mimeTypes = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml"
+// ==================== CONFIGURATION ====================
+const CONFIG = {
+  WORLD: { width: 200, height: 200, depth: 100 },
+  SCALE: 0.01,
+  CAMERA_DISTANCE: 5,
+  CAMERA_HEIGHT: 2.5,
+  PLAYER_SPEED: 0.15,
+  PLAYER_RUN_SPEED: 0.25,
+  PLAYER_CROUCH_SPEED: 0.08,
+  PLAYER_HEIGHT: 1.8,
+  PLAYER_CROUCH_HEIGHT: 1.0,
+  ROTATION_SPEED: 0.08,
+  BOT_COUNT: 8,
+  BOT_SPEED: 0.1,
+  WEAPON_DAMAGE: 25,
+  WEAPON_FIRE_RATE: 100,
+  WEAPON_RANGE: 100,
 };
-const rooms = new Map();
-const socketServer = { clients: new Set() };
-const maxWebSocketPayload = 8192;
-const OPEN = 1;
-const CLOSED = 3;
-const allowedSkins = new Set(["ranger", "arctic", "crimson"]);
 
-function send(socket, message) {
-  if (socket.readyState === OPEN) socket.send(JSON.stringify(message));
+// ==================== HELPERS ====================
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const toX = (x) => (x - CONFIG.WORLD.width / 2) * CONFIG.SCALE;
+const toZ = (y) => (y - CONFIG.WORLD.height / 2) * CONFIG.SCALE;
+
+// ==================== SCENE SETUP ====================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 80, 150);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 5, 10);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowShadowMap;
+document.body.appendChild(renderer.domElement);
+
+// ==================== LIGHTING ====================
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+directionalLight.position.set(50, 50, 50);
+directionalLight.castShadow = true;
+directionalLight.shadow.mapSize.width = 2048;
+directionalLight.shadow.mapSize.height = 2048;
+directionalLight.shadow.camera.far = 200;
+directionalLight.shadow.camera.left = -100;
+directionalLight.shadow.camera.right = 100;
+directionalLight.shadow.camera.top = 100;
+directionalLight.shadow.camera.bottom = -100;
+scene.add(directionalLight);
+
+// ==================== WORLD CREATION ====================
+function createGround() {
+  const groundGeometry = new THREE.PlaneGeometry(CONFIG.WORLD.width * CONFIG.SCALE * 2, CONFIG.WORLD.height * CONFIG.SCALE * 2);
+  const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x2d5016, roughness: 0.8 });
+  const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+  return ground;
 }
 
-function broadcast(room, message, except) {
-  const payload = JSON.stringify(message);
-  for (const client of room.clients) {
-    if (client !== except && client.readyState === OPEN) client.send(payload);
-  }
-}
+function createBuildings() {
+  const buildings = [];
+  const positions = [
+    { x: -30, y: -30, w: 20, h: 20 },
+    { x: 30, y: -30, w: 20, h: 20 },
+    { x: -30, y: 30, w: 20, h: 20 },
+    { x: 30, y: 30, w: 20, h: 20 },
+    { x: 0, y: 0, w: 15, h: 15 },
+  ];
 
-function removePlayer(socket) {
-  const { room, playerId } = socket;
-  if (!room || !playerId) return;
-  room.players.delete(playerId);
-  room.clients.delete(socket);
-  broadcast(room, { type: "leave", id: playerId });
-  if (room.clients.size === 0) rooms.delete(room.mode);
-  socket.room = null;
-  socket.playerId = null;
-}
+  positions.forEach(pos => {
+    const group = new THREE.Group();
+    
+    // Main structure - cube with better material
+    const wallGeometry = new THREE.BoxGeometry(pos.w * CONFIG.SCALE, 3 * CONFIG.SCALE, pos.h * CONFIG.SCALE);
+    const wallMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x8b4513, 
+      roughness: 0.7,
+      metalness: 0.1
+    });
+    const walls = new THREE.Mesh(wallGeometry, wallMaterial);
+    walls.castShadow = true;
+    walls.receiveShadow = true;
+    walls.position.y = 1.5 * CONFIG.SCALE;
+    group.add(walls);
 
-function isFiniteNumber(value, min, max) {
-  return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
-}
+    // Roof - cylinder shape
+    const roofGeometry = new THREE.ConeGeometry((pos.w * CONFIG.SCALE) / 2, 1.5 * CONFIG.SCALE, 8);
+    const roofMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x8b0000, 
+      roughness: 0.6 
+    });
+    const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+    roof.castShadow = true;
+    roof.receiveShadow = true;
+    roof.position.y = 3.3 * CONFIG.SCALE;
+    group.add(roof);
 
-function writeFrame(client, opcode, payload = Buffer.alloc(0)) {
-  if (client.readyState !== OPEN) return;
-  const length = payload.length;
-  if (length > maxWebSocketPayload) return client.close(1009, "Message too large");
-  const header = length < 126
-    ? Buffer.from([0x80 | opcode, length])
-    : Buffer.from([0x80 | opcode, 126, length >> 8, length & 0xff]);
-  client.socket.write(Buffer.concat([header, payload]));
-}
+    // Door frame - cylinder
+    const doorGeometry = new THREE.CylinderGeometry(0.4 * CONFIG.SCALE, 0.4 * CONFIG.SCALE, 2 * CONFIG.SCALE, 8);
+    const doorMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x654321, 
+      roughness: 0.8 
+    });
+    const door = new THREE.Mesh(doorGeometry, doorMaterial);
+    door.castShadow = true;
+    door.position.set(0, 1 * CONFIG.SCALE, (pos.h / 2 + 1) * CONFIG.SCALE);
+    group.add(door);
 
-function createClient(socket) {
-  const client = {
-    socket,
-    readyState: OPEN,
-    isAlive: true,
-    lastMessageAt: 0,
-    buffer: Buffer.alloc(0),
-    room: null,
-    playerId: null,
-    onMessage: null,
-    onClose: null,
-    send(message) { writeFrame(client, 1, Buffer.from(message)); },
-    ping() { writeFrame(client, 9); },
-    pong(payload) { writeFrame(client, 10, payload); },
-    close(code = 1000, reason = "") {
-      if (client.readyState === CLOSED) return;
-      const reasonBytes = Buffer.from(String(reason).slice(0, 120));
-      writeFrame(client, 8, Buffer.concat([Buffer.from([code >> 8, code & 0xff]), reasonBytes]));
-      client.readyState = CLOSED;
-      client.socket.end();
-    },
-    terminate() {
-      if (client.readyState === CLOSED) return;
-      client.readyState = CLOSED;
-      client.socket.destroy();
-    }
-  };
-  return client;
-}
-
-function receiveFrames(client, chunk) {
-  client.buffer = Buffer.concat([client.buffer, chunk]);
-  while (client.buffer.length >= 2) {
-    const first = client.buffer[0];
-    const second = client.buffer[1];
-    const fin = (first & 0x80) !== 0;
-    const opcode = first & 0x0f;
-    const masked = (second & 0x80) !== 0;
-    let length = second & 0x7f;
-    let offset = 2;
-    if (!fin || !masked) return client.close(1002, "Unsupported frame");
-    if (length === 126) {
-      if (client.buffer.length < 4) return;
-      length = client.buffer.readUInt16BE(2);
-      offset = 4;
-    } else if (length === 127) {
-      if (client.buffer.length < 10) return;
-      const high = client.buffer.readUInt32BE(2);
-      length = client.buffer.readUInt32BE(6);
-      if (high !== 0) return client.close(1009, "Message too large");
-      offset = 10;
-    }
-    if (length > maxWebSocketPayload) return client.close(1009, "Message too large");
-    const total = offset + 4 + length;
-    if (client.buffer.length < total) return;
-    const mask = client.buffer.subarray(offset, offset + 4);
-    const payload = Buffer.from(client.buffer.subarray(offset + 4, total));
-    for (let index = 0; index < payload.length; index++) payload[index] ^= mask[index % 4];
-    client.buffer = client.buffer.subarray(total);
-    if (opcode === 1) client.onMessage?.(payload);
-    else if (opcode === 8) return client.close();
-    else if (opcode === 9) client.pong(payload);
-    else if (opcode === 10) client.isAlive = true;
-    else return client.close(1003, "Unsupported data");
-  }
-}
-
-function acceptWebSocket(request, socket, head) {
-  const key = request.headers["sec-websocket-key"];
-  if (typeof key !== "string" || request.headers["sec-websocket-version"] !== "13") return socket.destroy();
-  const accept = createHash("sha1").update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest("base64");
-  socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
-  const client = createClient(socket);
-  socketServer.clients.add(client);
-  socket.on("data", chunk => receiveFrames(client, chunk));
-  socket.on("close", () => {
-    client.readyState = CLOSED;
-    socketServer.clients.delete(client);
-    client.onClose?.();
+    group.position.set(toX(pos.x), 0, toZ(pos.y));
+    scene.add(group);
+    buildings.push(group);
   });
-  socket.on("error", error => console.error("Multiplayer socket error:", error.message));
-  configureClient(client);
-  if (head.length) receiveFrames(client, head);
+
+  return buildings;
 }
 
-const httpServer = createServer((request, response) => {
-  const requestUrl = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
-  if (requestUrl.pathname === "/health") {
-    response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-    response.end(JSON.stringify({ ok: true, rooms: rooms.size, players: [...rooms.values()].reduce((sum, room) => sum + room.clients.size, 0) }));
-    return;
-  }
+function createEnvironment() {
+  // Trees (cylinder trunk + sphere canopy)
+  const treePositions = [
+    [-60, -60], [60, -60], [-60, 60], [60, 60],
+    [-80, 0], [80, 0], [0, -80], [0, 80]
+  ];
 
-  let requestedPath;
-  try {
-    requestedPath = decodeURIComponent(requestUrl.pathname);
-  } catch {
-    response.writeHead(400).end("Bad request");
-    return;
-  }
+  treePositions.forEach(pos => {
+    const treeGroup = new THREE.Group();
 
-  const relativePath = requestedPath === "/" ? "index.html" : requestedPath.slice(1);
-  const filePath = resolve(root, relativePath);
-  if (filePath !== root && !filePath.startsWith(root + sep)) {
-    response.writeHead(403).end("Forbidden");
-    return;
-  }
-  if (!existsSync(filePath) || !statSync(filePath).isFile()) {
-    response.writeHead(404).end("Not found");
-    return;
-  }
+    // Trunk - cylinder
+    const trunkGeometry = new THREE.CylinderGeometry(0.3 * CONFIG.SCALE, 0.4 * CONFIG.SCALE, 4 * CONFIG.SCALE, 8);
+    const trunkMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x654321, 
+      roughness: 0.9 
+    });
+    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+    trunk.castShadow = true;
+    trunk.receiveShadow = true;
+    trunk.position.y = 2 * CONFIG.SCALE;
+    treeGroup.add(trunk);
 
-  response.writeHead(200, {
-    "content-type": mimeTypes[extname(filePath)] || "application/octet-stream",
-    "x-content-type-options": "nosniff"
+    // Canopy - sphere
+    const canopyGeometry = new THREE.SphereGeometry(1.5 * CONFIG.SCALE, 8, 8);
+    const canopyMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x228b22, 
+      roughness: 0.7 
+    });
+    const canopy = new THREE.Mesh(canopyGeometry, canopyMaterial);
+    canopy.castShadow = true;
+    canopy.receiveShadow = true;
+    canopy.position.y = 4 * CONFIG.SCALE;
+    treeGroup.add(canopy);
+
+    treeGroup.position.set(toX(pos[0]), 0, toZ(pos[1]));
+    scene.add(treeGroup);
   });
-  createReadStream(filePath).pipe(response);
-});
+}
 
-httpServer.on("upgrade", (request, socket, head) => {
-  const requestUrl = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
-  if (requestUrl.pathname !== "/multiplayer") {
-    socket.destroy();
-    return;
+// ==================== CHARACTER MODEL ====================
+class Character {
+  constructor(isPlayer = false) {
+    this.group = new THREE.Group();
+    this.isPlayer = isPlayer;
+    this.health = 100;
+    this.ammo = 30;
+    this.isAlive = true;
+    this.isRunning = false;
+    this.isCrouching = false;
+    this.isAiming = false;
+    this.weaponAnimationTime = 0;
+    this.reloadTime = 0;
+    this.lastFireTime = 0;
+
+    // Skeleton structure
+    this.body = this.createBody();
+    this.leftArm = this.createLimb(0.2, 1.2, 0x8b6f47);
+    this.rightArm = this.createLimb(0.2, 1.2, 0x8b6f47);
+    this.leftLeg = this.createLimb(0.2, 1.4, 0x333333);
+    this.rightLeg = this.createLimb(0.2, 1.4, 0x333333);
+    this.head = this.createHead();
+    this.weapon = this.createWeapon();
+
+    // Positioning
+    this.body.position.y = 0.9;
+    this.head.position.set(0, 1.8, 0);
+    this.leftArm.position.set(-0.4, 1.4, 0);
+    this.rightArm.position.set(0.4, 1.4, 0);
+    this.leftLeg.position.set(-0.2, 0.7, 0);
+    this.rightLeg.position.set(0.2, 0.7, 0);
+    this.weapon.position.set(0.3, 1.5, -0.8);
+
+    this.group.add(this.body, this.head, this.leftArm, this.rightArm, this.leftLeg, this.rightLeg, this.weapon);
+    this.group.castShadow = true;
+
+    // Animation state
+    this.walkCycle = 0;
+    this.direction = { x: 0, z: 0 };
+    this.velocity = { x: 0, z: 0 };
   }
-  const origin = request.headers.origin;
-  if (origin) {
-    let originHost;
-    try {
-      originHost = new URL(origin).host;
-    } catch {
-      socket.destroy();
-      return;
+
+  createBody() {
+    const geometry = new THREE.BoxGeometry(0.5, 0.8, 0.3);
+    const material = new THREE.MeshStandardMaterial({ 
+      color: 0xFF6B6B, 
+      roughness: 0.6,
+      metalness: 0.1
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  createHead() {
+    const geometry = new THREE.SphereGeometry(0.25, 16, 16);
+    const material = new THREE.MeshStandardMaterial({ 
+      color: 0xDEB887, 
+      roughness: 0.5,
+      metalness: 0.0
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  createLimb(width, height, color) {
+    const geometry = new THREE.CylinderGeometry(width / 2, width / 2, height, 8);
+    const material = new THREE.MeshStandardMaterial({ 
+      color: color, 
+      roughness: 0.6 
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  createWeapon() {
+    const weaponGroup = new THREE.Group();
+
+    // Barrel - cylinder
+    const barrelGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.6, 8);
+    const barrelMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x2c3e50, 
+      roughness: 0.3,
+      metalness: 0.8
+    });
+    const barrel = new THREE.Mesh(barrelGeometry, barrelMaterial);
+    barrel.rotation.z = Math.PI / 2;
+    barrel.position.z = 0.3;
+    barrel.castShadow = true;
+    weaponGroup.add(barrel);
+
+    // Stock - box
+    const stockGeometry = new THREE.BoxGeometry(0.1, 0.15, 0.4);
+    const stockMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x8B4513, 
+      roughness: 0.7 
+    });
+    const stock = new THREE.Mesh(stockGeometry, stockMaterial);
+    stock.position.z = -0.2;
+    stock.castShadow = true;
+    weaponGroup.add(stock);
+
+    // Grip - cylinder
+    const gripGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.15, 6);
+    const gripMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x2c3e50, 
+      roughness: 0.5 
+    });
+    const grip = new THREE.Mesh(gripGeometry, gripMaterial);
+    grip.rotation.z = Math.PI / 2;
+    grip.position.set(0, -0.1, 0);
+    grip.castShadow = true;
+    weaponGroup.add(grip);
+
+    return weaponGroup;
+  }
+
+  updateAnimation(deltaTime) {
+    this.walkCycle += deltaTime * 6;
+
+    // Leg animation (walking/running/crouching)
+    const legSwing = Math.sin(this.walkCycle) * 0.4;
+    const speed = this.isRunning ? 0.08 : this.isCrouching ? 0.04 : 0.06;
+
+    if (this.direction.x !== 0 || this.direction.z !== 0) {
+      this.leftLeg.rotation.x = legSwing * speed;
+      this.rightLeg.rotation.x = -legSwing * speed;
+      this.leftArm.rotation.x = -legSwing * speed * 0.5;
+      this.rightArm.rotation.x = legSwing * speed * 0.5;
     }
-    if (originHost !== request.headers.host) {
-      socket.destroy();
-      return;
+
+    // Arm aiming animation
+    if (this.isAiming) {
+      this.rightArm.rotation.x = -1.2;
+      this.rightArm.rotation.z = 0.3;
+      this.weapon.position.set(0.2, 1.3, -0.5);
+      this.head.rotation.x = -0.1;
+    } else {
+      this.rightArm.rotation.x = 0;
+      this.rightArm.rotation.z = 0;
+      this.weapon.position.set(0.3, 1.5, -0.8);
+      this.head.rotation.x = 0;
+    }
+
+    // Crouching animation
+    if (this.isCrouching) {
+      this.body.scale.y = 0.6;
+      this.body.position.y = 0.6;
+      this.head.position.y = 1.2;
+      this.leftLeg.scale.y = 0.8;
+      this.rightLeg.scale.y = 0.8;
+    } else {
+      this.body.scale.y = 1;
+      this.body.position.y = 0.9;
+      this.head.position.y = 1.8;
+      this.leftLeg.scale.y = 1;
+      this.rightLeg.scale.y = 1;
+    }
+
+    // Running bob animation
+    if (this.isRunning) {
+      const bobAmount = Math.sin(this.walkCycle * 2) * 0.05;
+      this.group.position.y = bobAmount;
+    } else {
+      this.group.position.y = 0;
+    }
+
+    // Reload animation
+    if (this.reloadTime > 0) {
+      this.reloadTime -= deltaTime;
+      const reloadRotation = (1 - this.reloadTime / 1.5) * Math.PI;
+      this.rightArm.rotation.x = -reloadRotation;
     }
   }
-  acceptWebSocket(request, socket, head);
-});
 
-function configureClient(socket) {
-  socket.isAlive = true;
-  socket.lastMessageAt = 0;
-  const joinTimeout = setTimeout(() => {
-    if (!socket.playerId) socket.close(1008, "Join message required");
-  }, 5000);
+  takeDamage(amount) {
+    this.health -= amount;
+    if (this.health <= 0) {
+      this.isAlive = false;
+      this.group.visible = false;
+    }
+  }
 
-  socket.onMessage = raw => {
+  fire() {
     const now = Date.now();
-    if (now - socket.lastMessageAt < 12) {
-      socket.close(1008, "Message rate exceeded");
-      return;
+    if (now - this.lastFireTime > CONFIG.WEAPON_FIRE_RATE && this.ammo > 0) {
+      this.lastFireTime = now;
+      this.ammo--;
+      
+      // Muzzle flash
+      this.createMuzzleFlash();
+      
+      // Recoil animation
+      this.weapon.position.z += 0.15;
+      this.rightArm.position.x -= 0.05;
+      
+      setTimeout(() => {
+        this.weapon.position.z -= 0.15;
+        this.rightArm.position.x += 0.05;
+      }, 50);
+
+      return true;
     }
-    socket.lastMessageAt = now;
+    return false;
+  }
 
-    let message;
-    try {
-      message = JSON.parse(raw.toString());
-    } catch {
-      socket.close(1007, "Invalid JSON");
-      return;
-    }
-    if (!message || typeof message !== "object" || Array.isArray(message)) {
-      socket.close(1008, "Invalid message");
-      return;
-    }
+  createMuzzleFlash() {
+    const flashGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+    const flashMaterial = new THREE.MeshBasicMaterial({ color: 0xFFAA00 });
+    const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+    
+    const worldPos = new THREE.Vector3();
+    this.weapon.getWorldPosition(worldPos);
+    flash.position.copy(worldPos);
+    flash.position.z -= 0.5;
+    
+    scene.add(flash);
+    setTimeout(() => scene.remove(flash), 50);
+  }
 
-    if (message.type === "join" && !socket.playerId) {
-      if (!allowedModes.has(message.mode) || !allowedMaps.has(message.map || "harbor") || typeof message.name !== "string") {
-        socket.close(1008, "Invalid room");
-        return;
-      }
-
-      const name = message.name.trim().replace(/[^\p{L}\p{N} _-]/gu, "").slice(0, 18) || "Ranger";
-      let room = rooms.get(`${message.mode}:${message.map}`);
-      if (!room) {
-        room = { mode: message.mode, map: message.map || "harbor", clients: new Set(), players: new Map() };
-        rooms.set(`${message.mode}:${message.map}`, room);
-      }
-      if (room.clients.size >= maxPlayers) {
-        send(socket, { type: "error", message: "That room is full. Try again later." });
-        socket.close(1008, "Room full");
-        return;
-      }
-
-      clearTimeout(joinTimeout);
-      const id = randomUUID();
-      const team = room.players.size % 2 === 0 ? "blue" : "red";
-      const skin = allowedSkins.has(message.skin) ? message.skin : "ranger";
-      const player = { id, name, team, skin, x: 2100, y: 1600, angle: -Math.PI / 2, health: 100, weapon: "rifle", fireSeq: 0 };
-      const existingPlayers = [...room.players.values()];
-      room.clients.add(socket);
-      room.players.set(id, player);
-      socket.room = room;
-      socket.playerId = id;
-      send(socket, { type: "welcome", id, mode: room.mode, map: room.map, players: existingPlayers });
-      broadcast(room, { type: "join", player }, socket);
-      return;
-    }
-
-    const room = socket.room;
-    const playerId = socket.playerId;
-    if (!room || !playerId) {
-      socket.close(1008, "Join first");
-      return;
-    }
-
-    if (message.type === "state") {
-      if (!isFiniteNumber(message.x, 0, 4200) || !isFiniteNumber(message.y, 0, 3200) ||
-          !isFiniteNumber(message.angle, -1000, 1000) || !isFiniteNumber(message.health, 0, 100) ||
-          typeof message.weapon !== "string" || !["rifle", "smg", "carbine", "pistol", "heavyPistol"].includes(message.weapon) ||
-          !Number.isInteger(message.fireSeq) || message.fireSeq < 0) return;
-      const player = room.players.get(playerId);
-      Object.assign(player, {
-        x: message.x,
-        y: message.y,
-        angle: message.angle,
-        health: message.health,
-        weapon: message.weapon,
-        fireSeq: message.fireSeq,
-        moving: Boolean(message.moving)
-      });
-      broadcast(room, { type: "state", player }, socket);
-      return;
-    }
-
-    if (message.type === "hit") {
-      if (typeof message.targetId !== "string" ||
-          !isFiniteNumber(message.damage, 1, 45) ||
-          !room.players.has(message.targetId) ||
-          message.targetId === playerId) return;
-      broadcast(room, {
-        type: "hit",
-        attackerId: playerId,
-        targetId: message.targetId,
-        damage: Math.round(message.damage)
-      });
-    }
-  };
-
-  socket.onClose = () => {
-    clearTimeout(joinTimeout);
-    removePlayer(socket);
-  };
+  reload() {
+    this.reloadTime = 1.5;
+    this.ammo = 30;
+  }
 }
 
-const heartbeat = setInterval(() => {
-  for (const socket of socketServer.clients) {
-    if (!socket.isAlive) {
-      socket.terminate();
-      continue;
-    }
-    socket.isAlive = false;
-    socket.ping();
+// ==================== PLAYER CONTROLLER ====================
+class Player {
+  constructor() {
+    this.character = new Character(true);
+    this.scene.add(this.character.group);
+    
+    this.position = { x: 0, y: 0 };
+    this.rotation = 0;
+    this.input = {};
+    
+    this.setupInput();
   }
-}, 30000);
 
-httpServer.on("close", () => clearInterval(heartbeat));
-httpServer.listen(port, "0.0.0.0", () => {
-  console.log(`Outpost server listening on http://localhost:${port}`);
+  setupInput() {
+    document.addEventListener('keydown', (e) => {
+      this.input[e.key.toLowerCase()] = true;
+      
+      if (e.key === 'c' || e.key === 'C') this.character.isCrouching = true;
+      if (e.key === 'r' || e.key === 'R') this.character.reload();
+    });
+
+    document.addEventListener('keyup', (e) => {
+      this.input[e.key.toLowerCase()] = false;
+      
+      if (e.key === 'c' || e.key === 'C') this.character.isCrouching = false;
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      const deltaX = e.movementX || e.mozMovementX || 0;
+      this.rotation -= deltaX * 0.005;
+    });
+
+    document.addEventListener('mousedown', (e) => {
+      if (e.button === 0) this.character.isAiming = true;
+    });
+
+    document.addEventListener('mouseup', (e) => {
+      if (e.button === 0) {
+        this.character.isAiming = false;
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (e.button === 0) this.character.fire();
+    });
+  }
+
+  update(deltaTime) {
+    const speed = this.character.isCrouching ? CONFIG.PLAYER_CROUCH_SPEED : 
+                  this.input['shift'] ? CONFIG.PLAYER_RUN_SPEED : CONFIG.PLAYER_SPEED;
+    
+    this.character.isRunning = this.input['shift'] && !this.character.isCrouching;
+
+    const moveX = (this.input['w'] ? 1 : 0) - (this.input['s'] ? 1 : 0);
+    const moveZ = (this.input['a'] ? 1 : 0) - (this.input['d'] ? 1 : 0);
+
+    if (moveX !== 0 || moveZ !== 0) {
+      const angle = Math.atan2(moveZ, moveX) + this.rotation;
+      this.position.x += Math.cos(angle) * speed * deltaTime * 60;
+      this.position.y += Math.sin(angle) * speed * deltaTime * 60;
+    }
+
+    this.position.x = clamp(this.position.x, -99, 99);
+    this.position.y = clamp(this.position.y, -99, 99);
+
+    this.character.group.position.set(toX(this.position.x), 0, toZ(this.position.y));
+    this.character.group.rotation.y = this.rotation;
+    this.character.direction = { x: moveX, z: moveZ };
+    this.character.updateAnimation(deltaTime);
+
+    // Camera follow with aiming adjustment
+    const cameraDistance = this.character.isAiming ? 3 : CONFIG.CAMERA_DISTANCE;
+    const cameraHeight = this.character.isAiming ? 1.6 : CONFIG.CAMERA_HEIGHT;
+    
+    const cameraX = this.character.group.position.x - Math.cos(this.rotation) * cameraDistance;
+    const cameraZ = this.character.group.position.z - Math.sin(this.rotation) * cameraDistance;
+    
+    camera.position.x += (cameraX - camera.position.x) * 0.1;
+    camera.position.y += (cameraHeight - camera.position.y) * 0.1;
+    camera.position.z += (cameraZ - camera.position.z) * 0.1;
+    camera.lookAt(
+      this.character.group.position.x,
+      this.character.group.position.y + 1,
+      this.character.group.position.z
+    );
+  }
+}
+
+// ==================== BOT AI ====================
+class Bot {
+  constructor() {
+    this.character = new Character(false);
+    this.position = { x: Math.random() * 160 - 80, y: Math.random() * 160 - 80 };
+    this.character.group.position.set(toX(this.position.x), 0, toZ(this.position.y));
+    
+    this.rotation = Math.random() * Math.PI * 2;
+    this.targetRotation = this.rotation;
+    this.moveTimer = 0;
+    this.targetX = this.position.x;
+    this.targetY = this.position.y;
+    this.shootTimer = 0;
+  }
+
+  update(deltaTime, playerPos, playerAlive) {
+    this.moveTimer -= deltaTime;
+    this.shootTimer -= deltaTime;
+
+    const dx = playerPos.x - this.position.x;
+    const dy = playerPos.y - this.position.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    this.character.isRunning = dist < 30;
+
+    if (dist < 50 && playerAlive) {
+      this.targetRotation = Math.atan2(dy, dx);
+      
+      if (dist < 30) {
+        this.character.isAiming = true;
+        if (this.shootTimer <= 0) {
+          this.character.fire();
+          this.shootTimer = 0.5;
+        }
+      }
+    } else {
+      this.character.isAiming = false;
+    }
+
+    if (this.moveTimer <= 0) {
+      this.targetX = Math.random() * 160 - 80;
+      this.targetY = Math.random() * 160 - 80;
+      this.moveTimer = 3;
+    }
+
+    const moveX = this.targetX - this.position.x;
+    const moveY = this.targetY - this.position.y;
+    const moveDist = Math.sqrt(moveX * moveX + moveY * moveY);
+
+    if (moveDist > 2) {
+      const moveAngle = Math.atan2(moveY, moveX);
+      this.position.x += Math.cos(moveAngle) * CONFIG.BOT_SPEED * deltaTime * 60;
+      this.position.y += Math.sin(moveAngle) * CONFIG.BOT_SPEED * deltaTime * 60;
+    }
+
+    this.rotation += (this.targetRotation - this.rotation) * 0.05;
+
+    this.character.group.position.set(toX(this.position.x), 0, toZ(this.position.y));
+    this.character.group.rotation.y = this.rotation;
+    this.character.direction = { x: moveX, z: moveY };
+    this.character.updateAnimation(deltaTime);
+  }
+}
+
+// ==================== GAME STATE ====================
+class Game {
+  constructor() {
+    this.player = null;
+    this.bots = [];
+    this.projectiles = [];
+    this.lastUpdateTime = Date.now();
+  }
+
+  initialize() {
+    createGround();
+    createBuildings();
+    createEnvironment();
+
+    this.player = new Player();
+    this.player.character.group.position.set(0, 0, 0);
+
+    for (let i = 0; i < CONFIG.BOT_COUNT; i++) {
+      const bot = new Bot();
+      scene.add(bot.character.group);
+      this.bots.push(bot);
+    }
+  }
+
+  update() {
+    const now = Date.now();
+    const deltaTime = (now - this.lastUpdateTime) / 1000;
+    this.lastUpdateTime = now;
+
+    if (this.player) {
+      this.player.update(deltaTime);
+
+      // Check player firing at bots
+      if (this.player.character.isAiming) {
+        this.checkPlayerShooting();
+      }
+    }
+
+    // Update bots
+    this.bots.forEach((bot, index) => {
+      if (bot.character.isAlive) {
+        const playerPos = this.player ? this.player.position : { x: 0, y: 0 };
+        const playerAlive = this.player ? this.player.character.isAlive : false;
+        bot.update(deltaTime, playerPos, playerAlive);
+
+        // Bot shooting at player
+        if (bot.character.isAiming && this.player && this.player.character.isAlive && bot.character.fire()) {
+          this.checkBotShooting(bot, index);
+        }
+      }
+    });
+  }
+
+  checkPlayerShooting() {
+    if (!this.player) return;
+
+    const playerPos = this.player.character.group.position;
+    const playerDir = new THREE.Vector3(0, 0, -1);
+    playerDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.player.rotation);
+
+    this.bots.forEach((bot) => {
+      if (!bot.character.isAlive) return;
+
+      const botPos = bot.character.group.position;
+      const dx = botPos.x - playerPos.x;
+      const dy = botPos.y - playerPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < CONFIG.WEAPON_RANGE) {
+        const botDir = new THREE.Vector3(dx, 0, dy).normalize();
+        const angle = Math.acos(playerDir.dot(botDir));
+
+        if (angle < 0.3) {
+          bot.character.takeDamage(CONFIG.WEAPON_DAMAGE);
+        }
+      }
+    });
+  }
+
+  checkBotShooting(bot, botIndex) {
+    if (!this.player || !this.player.character.isAlive) return;
+
+    const botPos = bot.character.group.position;
+    const playerPos = this.player.character.group.position;
+    const dx = playerPos.x - botPos.x;
+    const dy = playerPos.y - botPos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < CONFIG.WEAPON_RANGE) {
+      const botDir = new THREE.Vector3(0, 0, -1);
+      botDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), bot.rotation);
+
+      const playerDir = new THREE.Vector3(dx, 0, dy).normalize();
+      const angle = Math.acos(botDir.dot(playerDir));
+
+      if (angle < 0.4) {
+        this.player.character.takeDamage(CONFIG.WEAPON_DAMAGE * 0.5);
+      }
+    }
+  }
+
+  render() {
+    renderer.render(scene, camera);
+  }
+}
+
+// ==================== INITIALIZATION & MAIN LOOP ====================
+const game = new Game();
+game.initialize();
+
+function animate() {
+  requestAnimationFrame(animate);
+  game.update();
+  game.render();
+}
+
+animate();
+
+// Handle window resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// HUD
+const hudContainer = document.createElement('div');
+hudContainer.style.cssText = 'position:absolute;top:10px;left:10px;color:#fff;font-family:Arial;font-size:16px;background:rgba(0,0,0,0.5);padding:15px;border-radius:5px;';
+document.body.appendChild(hudContainer);
+
+setInterval(() => {
+  if (game.player && game.player.character.isAlive) {
+    hudContainer.innerHTML = `
+      <div>Health: ${Math.max(0, Math.floor(game.player.character.health))}</div>
+      <div>Ammo: ${game.player.character.ammo}</div>
+      <div>Mode: ${game.player.character.isCrouching ? 'CROUCH' : game.player.character.isRunning ? 'RUN' : 'WALK'}</div>
+      <div>Aiming: ${game.player.character.isAiming ? 'YES' : 'NO'}</div>
+      <div>Bots: ${game.bots.filter(b => b.character.isAlive).length}</div>
+    `;
+  }
+}, 100);
